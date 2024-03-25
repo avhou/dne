@@ -1,23 +1,23 @@
 import pandas as pd
 from typing import Literal
 from pathlib import Path
-
 class DataLoader:
 
-    def __init__(self, file_path: Path, aggregation_type: Literal["original", "daily"] = "original"):
+    def __init__(self, file_path: Path):
         """
         Initializes a DataLoader object.
 
         Args:
             file_path (Path): The path to the Excel file.
-            aggregation_type (Literal["original", "daily"], optional): The aggregation type of the data. Defaults to "Original".
         """
         self.file_path = file_path
-        self.aggregation_type = aggregation_type
 
-    def read_excel(self):
+    def read_excel(self, aggregation_type: Literal["original", "daily"] = "original"):
         """
         Reads the Excel file and returns the data.
+
+        Args:
+            aggregation_type (Literal["original", "daily"], optional): The aggregation type of the data. Defaults to "Original".
 
         Returns:
             pandas.DataFrame: The data read from the Excel file.
@@ -28,9 +28,10 @@ class DataLoader:
         """
         try:
             data = pd.read_excel(self.file_path, skiprows=3)
+            data['DateTime'] = pd.to_datetime(data['DateTime'], format="%d/%m/%Y %H:%M")
 
-            if self.aggregation_type == "daily":
-                data = data.groupby(pd.Grouper(key='datetime', freq='D')).sum().reset_index()
+            if aggregation_type == "daily":
+                data = data.groupby(pd.Grouper(key='DateTime', freq='D')).sum().reset_index()
 
             return data
         except FileNotFoundError:
