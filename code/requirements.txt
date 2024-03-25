@@ -1,3 +1,6 @@
 torch
 pandas
 jupyter
+ipykernel
+xlrd
+sklearn
