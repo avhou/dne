@@ -10,7 +10,7 @@ class DataLoader:
 
         Args:
             file_path (Path): The path to the Excel file.
-            aggregation_type (Literal["Original", "Daily"], optional): The aggregation type of the data. Defaults to "Original".
+            aggregation_type (Literal["original", "daily"], optional): The aggregation type of the data. Defaults to "Original".
         """
         self.file_path = file_path
         self.aggregation_type = aggregation_type
@@ -31,7 +31,7 @@ class DataLoader:
 
             if self.aggregation_type == "daily":
                 data = data.groupby(pd.Grouper(key='datetime', freq='D')).sum().reset_index()
-                
+
             return data
         except FileNotFoundError:
             print(f"File not found for path: ${self.file_path}.")
