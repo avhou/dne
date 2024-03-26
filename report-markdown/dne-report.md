@@ -1,7 +1,7 @@
 ---
 title: "IM1102-232433M - Deep Neural Engingeering assignment 2"
 subtitle: "Modifying the attention mechanism of transformers for time series forecasting"
-author: "Arne Lescrauwaet (TODO) - Joachim Verschelde (TODO) - Alexander Van Hecke (852631385)"
+author: "Arne Lescrauwaet (852617312) - Joachim Verschelde (TODO) - Alexander Van Hecke (852631385)"
 institute: "OU"
 date: \today
 geometry: margin=2.5cm
@@ -14,7 +14,7 @@ papersize: a4
 
 # Introduction
 
-This report details the steps taken by Arne Lescrauwaet (TODO), Joachim Verschelde (TODO) and Alexander Van Hecke (852631385) for the second assignment of the 2023 Deep Neural Engineering course organised by the Open University [@dne].
+This report details the steps taken by Arne Lescrauwaet (852617312), Joachim Verschelde (TODO) and Alexander Van Hecke (852631385) for the second assignment of the 2023 Deep Neural Engineering course organised by the Open University [@dne].
 
 For this assignment we look at different attention mechanisms in transformers [@transformer] for use with time series data.  The attention mechanism enables a transformer model to selectively focus on relevant parts of the input data.  The goal is to be able to capture long range dependencies and relationships between items of the input data.  This is particularly important for time series data containing recurring patterns, e.g. hourly traffic counts on busy highways and hourly power consumption of nations.  We expect these types of data to contain clear and recurring patterns (i.e. traffic will typically be lower during weekends) and we want an attention mechanism to capture these patterns.  In addition to capturing recurring patterns, we would also like to be able to capture the ``local context'' of a pattern to predict new values.  That is, when encountering an event that is similar to a past event, we want to take the outcome of that past event into account in our prediction.
 
@@ -42,12 +42,17 @@ TODO nagaan of we idd performance willen meten.
 
 ## Dataset description {#sec:dataset}
 
-The layout of the dataset is fully described here [@dataset].  We recap the most important points here.
+We use data from Elia, which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast datasets.  These contain time series of actual measured power in megawatt (MW), and also 1 day ahead and 7 day ahead predicted solar power output in MW.  Data is available for a period of 12 years (February 2012 until now) in monthly datasets.  Measurements and predictions are recorded every quarter of an hour.  The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points here.
+
+TODO iets zeggen over welke maanden we selecteren?
 
 
-| feature | description | range     |
-|:--------|:------------|:----------|
-| todo    | todo        | [0.0-0.0] |
+| feature                 | description                           | range                            |
+|:------------------------|:--------------------------------------|:---------------------------------|
+| DateTime                | Date and time per quarter hour        | [00:00 - 24:00] in quarter hours |
+| Measurement             | Measured solar power production in MW | [0.0 - 5000.0]                   |
+| Prediction 1 day ahead  | D+1 forecast in MW                    | [0.0 - 5000.0]                   |
+| Prediction 7 days ahead | D+7 forecast in MW                    | [0.0 - 5000.0]                   |
 
 Table:  Features captured per quarter-hour in @dataset \label{table:features}
 
