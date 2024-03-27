@@ -31,8 +31,12 @@ TODO nog meer zoeken naar verschillende attention mechanismen.
 In this paper, we focus on using transformers for time series forecasting.  We aim to compare different attention mechanism and determine which mechanism best captures the outcome of past events.
 
 > **RQ : When comparing regular self-attention, convoluted self-attention, xyz self-attention, xyz2 self-attention, which mechanism best predicts future values?**
+> **RQ : Vergelijken van onze voorspelling met die van Elia**
 
 TODO nagaan wat we juist willen onderzoeken?  accuracy?  best outcomes capteren (zonder naar resultaat te kijken zegt dit niet veel)?
+
+-> vergelijken van de accuracy van verschillende attention mechanism
+-> vergelijken met elia voorspelling
 
 Firstly, this report will look at the characteristics of the dataset used and discuss pre-processing steps.  Then, we will consider several attention mechanisms,  discuss design and implementation details and finally evaluate the performance of these attention mechanisms on the dataset.
 
@@ -46,6 +50,14 @@ We use data from Elia, which operates the electricity transmission network in Be
 
 TODO iets zeggen over welke maanden we selecteren?
 
+-> verschillende scenario's : 
+- scenario 1 : zelfde maand (augustus) over alle jaren heen
+- scenario 2 : 3 maanden van een seizoen (zomer) voor 1 jaar
+- scenario 3 : zelfde maand (december) over alle jaren heen
+- scenario 4 : 3 maanden van een seizoen (winter) voor 1 jaar
+
+te varieren met input embedding size 5 - 10 - 20 dagen?
+
 
 | feature                 | description                           | range                            |
 |:------------------------|:--------------------------------------|:---------------------------------|
@@ -56,32 +68,34 @@ TODO iets zeggen over welke maanden we selecteren?
 
 Table:  Features captured per quarter-hour in @dataset \label{table:features}
 
+TODO extra features / embedding
+-> feature + positional encoding + one-hot encoding van dag of maand of week "temporal encoding"
+
 TODO outliers
+- > niets doen
 
 The features are organized as a time series of quarter-hour values.
 
-TODO welke feature of features gaan we bekijken?  Indien solar pv, kijken we ook naar de forecasts van elia zelf?
-
-
 ## Data general properties
 
-TODO spreken over regularity.  zon, dag / nacht, ...  correlation is hier allicht geen concern als we maar 1 feature zouden in beschouwing nemen
+TODO spreken over regularity.  zon, dag / nacht, ...  
+ -> checken normaal verdeeld
 
 ## Data pre-processing
 
 TODO omschrijven van de data pre-processing stappen die we gaan nemen.  bv selectie van data (maanden), aggregeren tot uren / dagen / weken?  concatenatie van waarden per maand?  per zomer?  op welke lengte opslitsen?   nachtelijke uren eruit halen?
 
-### PCA analysis
+-> aggregaties te voorzien :
 
-TODO NVT?
-
-### Duplicates analysis
-
-TODO NVT?
+- geen 
+- hourly
+- om de 4 uur 
+- om de dag
 
 ### Outlier analysis {#sec:outlier}
 
-TODO NVT?
+-> check doen op foute waarden, uitschieters
+-> we gaan normaal gezien geen waarden verwijderen 
 
 
 # Methodology and Implementation
@@ -100,10 +114,18 @@ We decided to evaluate the following attention mechanisms :
 
 - regular self-attention
 - convoluted self-attention as described in [@paper]
-- XYZ
+- asymetric convoluted self-attention 
 - XYZ
 
+-> kijken naar RCNN?
+-> eigenvectoren?
+
 TODO experiment beschrijven naar dataset of datasets, parameters (bv kernel size) en hyperparameters (indien van toepassing)
+
+hyperparameters : 
+-> kernel size 
+-> attention head (softmax tussen key en query)
+-> gridsearch, random search of half random search (scikit learn)?
 
 | algo                      | parameter   | range |
 |:--------------------------|:------------|------:|
@@ -141,6 +163,9 @@ To evaluate whether ... TODO ... self-attention ... , we formulate the following
 > **H~0~ : A self-attention mechanism using XYZ is not better at predicting ... than regular self-attention .**
 
 If the p-value is below $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that there is indeed a difference between the TODO.  
+
+-> vergelijken met base line voorspellingen elia?
+-> regressieanalyse van de residuals.
 
 ## Results
 
