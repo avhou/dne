@@ -2,3 +2,5 @@ torch
 pandas
 jupyter
 matplotlib
+seaborn
+xlrd

@@ -22,31 +22,25 @@ Different kinds of attention mechanisms exist.  Convolutional self-attention is 
 
 Even though transformers were originally designed in the field of natural language processing (NLP), a lot of work has been done to use transformers with time series data.  An overview of different ways to adapt transformers to time series data is given in [@timeseries1].  The time2vec encoding mechanism is introduced in [@timeseries2].  The authors of this paper use transformer models to predict stock prices, and claim these models can be used both for short and long term predictions.  The effectiveness of applying transformers to time series data is tested in [@timeseries3].
 
-TODO hier korte literature review
-TODO nog meer zoeken naar verschillende attention mechanismen.
-
+The original transformer architecture introduces a quadratic time and space complexity.  Much work has been done to improve on this.  The LogSparse transformer is introduced in [@paper], which reduces the memory cost to $O(L {(\log {}L)}^2)$.  The informer model [@informer] even achieves $O(L {\log {}L)}$ memory complexity.  In this report we will focus on attention mechanisms in the context of time series forecasting, ignoring space and time complexity of the transformer algorithm.
 
 # Goal
 
-In this paper, we focus on using transformers for time series forecasting.  We aim to compare different attention mechanism and determine which mechanism best captures the outcome of past events.
+In this paper, we focus on using transformers for time series forecasting. We aim to compare different attention mechanism and determine which mechanism best captures the outcome of past events.  We formulate a first research question : 
 
-> **RQ : When comparing regular self-attention, convoluted self-attention, xyz self-attention, xyz2 self-attention, which mechanism best predicts future values?**
-> **RQ : Vergelijken van onze voorspelling met die van Elia**
+> **RQ 1 : When comparing regular self-attention, convoluted self-attention, TODO, TODO, which mechanism best predicts future values using accuracy as metric?**
 
-TODO nagaan wat we juist willen onderzoeken?  accuracy?  best outcomes capteren (zonder naar resultaat te kijken zegt dit niet veel)?
+The Elia dataset used is fully described in [the dataset description section](#sec:dataset).  It not only contains time series data, but also day+1 and day+7 predictions of the same data.  We formulate a second research question : 
 
--> vergelijken van de accuracy van verschillende attention mechanism
--> vergelijken met elia voorspelling
+> **RQ 2 : Is the accuracy of a transformer model as good as the Elia prediction model?**
 
 Firstly, this report will look at the characteristics of the dataset used and discuss pre-processing steps.  Then, we will consider several attention mechanisms,  discuss design and implementation details and finally evaluate the performance of these attention mechanisms on the dataset.
-
-TODO nagaan of we idd performance willen meten.
 
 # Data analysis
 
 ## Dataset description {#sec:dataset}
 
-We use data from Elia, which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast datasets.  These contain time series of actual measured power in megawatt (MW), and also 1 day ahead and 7 day ahead predicted solar power output in MW.  Data is available for a period of 12 years (February 2012 until now) in monthly datasets.  Measurements and predictions are recorded every quarter of an hour.  The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points here.
+We use data from Elia [@elia], which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast datasets.  These contain time series of actual measured power in megawatt (MW), and also  day+1 and day+7 predictions of solar power output in MW.  Data is available for a period of 12 years (February 2012 until now) in monthly datasets.  Measurements and predictions are recorded every quarter of an hour.  The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points here.
 
 TODO iets zeggen over welke maanden we selecteren?
 
@@ -59,24 +53,24 @@ TODO iets zeggen over welke maanden we selecteren?
 te varieren met input embedding size 5 - 10 - 20 dagen?
 
 
-| feature                 | description                           | range                            |
-|:------------------------|:--------------------------------------|:---------------------------------|
-| DateTime                | Date and time per quarter hour        | [00:00 - 24:00] in quarter hours |
-| Measurement             | Measured solar power production in MW | [0.0 - 5000.0]                   |
-| Prediction 1 day ahead  | D+1 forecast in MW                    | [0.0 - 5000.0]                   |
-| Prediction 7 days ahead | D+7 forecast in MW                    | [0.0 - 5000.0]                   |
+| feature          | description                           | range                            |
+|:-----------------|:--------------------------------------|:---------------------------------|
+| DateTime         | Date and time per quarter hour        | [00:00 - 24:00] in quarter hours |
+| Measurement      | Measured solar power production in MW | [0.0 - 6000.0]                   |
+| Day+1 prediction | D+1 solar power forecast in MW        | [0.0 - 6000.0]                   |
+| Day+7 prediction | D+7 solar power forecast in MW        | [0.0 - 6000.0]                   |
 
 Table:  Features captured per quarter-hour in @dataset \label{table:features}
 
 TODO extra features / embedding
 -> feature + positional encoding + one-hot encoding van dag of maand of week "temporal encoding"
 
-TODO outliers
-- > niets doen
-
-The features are organized as a time series of quarter-hour values.
-
 ## Data general properties
+
+Data is highly regular and contains obvious day - night recurring patterns.  Since we are using solar power production data, data typically shows no values in the early morning, building towards a peak around noon, and then slowly reducing values towards the evening.  This is illustrated in Figure @{fig:recurrent-pattern}.
+
+
+![Typical recurrent patterns, here for September 2023](figures/recurrent-pattern.png){#fig:recurrent-pattern}
 
 TODO spreken over regularity.  zon, dag / nacht, ...  
  -> checken normaal verdeeld
