@@ -28,11 +28,11 @@ The original transformer architecture introduces a quadratic time and space comp
 
 In this paper, we focus on using transformers for time series forecasting. We aim to compare different attention mechanism and determine which mechanism best captures the outcome of past events.  We formulate a first research question : 
 
-> **RQ 1 : When comparing regular self-attention, convoluted self-attention, TODO, TODO, which mechanism best predicts future values using accuracy as metric?**
+> **RQ 1 : When comparing regular self-attention, convoluted self-attention, TODO, TODO, which mechanism best predicts future values using mean square error (MSE) as metric?**
 
 The Elia dataset used is fully described in [the dataset description section](#sec:dataset).  It not only contains time series data, but also day+1 and day+7 predictions of the same data.  We formulate a second research question : 
 
-> **RQ 2 : Is the accuracy of a transformer model as good as the Elia prediction model?**
+> **RQ 2 : Is the MSE of a transformer model better than the Elia prediction model?**
 
 Firstly, this report will look at the characteristics of the dataset used and discuss pre-processing steps.  Then, we will consider several attention mechanisms,  discuss design and implementation details and finally evaluate the performance of these attention mechanisms on the dataset.
 
@@ -40,7 +40,7 @@ Firstly, this report will look at the characteristics of the dataset used and di
 
 ## Dataset description {#sec:dataset}
 
-We use data from Elia [@elia], which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast datasets.  These contain time series of actual measured power in megawatt (MW), and also  day+1 and day+7 predictions of solar power output in MW.  Data is available for a period of 12 years (February 2012 until now) in monthly datasets.  Measurements and predictions are recorded every quarter of an hour.  The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points here.
+We use data from Elia [@elia], which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast datasets.  These contain time series of actual measured power in megawatt (MW), and also  day+1 and day+7 predictions of solar power output in MW.  Data is available for a period of 12 years (February 2012 until now) in monthly datasets.  Measurements and predictions are recorded every quarter of an hour.  The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points in Table \ref{table:features}.
 
 TODO iets zeggen over welke maanden we selecteren?
 
@@ -49,9 +49,6 @@ TODO iets zeggen over welke maanden we selecteren?
 - scenario 2 : 3 maanden van een seizoen (zomer) voor 1 jaar
 - scenario 3 : zelfde maand (december) over alle jaren heen
 - scenario 4 : 3 maanden van een seizoen (winter) voor 1 jaar
-
-te varieren met input embedding size 5 - 10 - 20 dagen?
-
 
 | feature          | description                           | range                            |
 |:-----------------|:--------------------------------------|:---------------------------------|
@@ -67,40 +64,46 @@ TODO extra features / embedding
 
 ## Data general properties
 
-Data is highly regular and contains obvious day - night recurring patterns.  Since we are using solar power production data, data typically shows no values in the early morning, building towards a peak around noon, and then slowly reducing values towards the evening.  This is illustrated in Figure @{fig:recurrent-pattern}.
+Data is not normally distributed but highly regular and contains obvious day - night recurring patterns.  Since we are using solar power production data, data typically shows no values in the early morning, building towards a peak around noon, and then slowly reducing values towards the evening.  This is illustrated in Figure @{fig:recurrent-pattern-september}.
 
-
-![Typical recurrent patterns, here for September 2023](figures/recurrent-pattern.png){#fig:recurrent-pattern}
-
-TODO spreken over regularity.  zon, dag / nacht, ...  
- -> checken normaal verdeeld
+There are obvious differences in solar power generation between summer months and winter months, but the general pattern remains the same, as illustrated in Figure @{fig:recurrent-pattern-january}.
 
 ## Data pre-processing
 
-TODO omschrijven van de data pre-processing stappen die we gaan nemen.  bv selectie van data (maanden), aggregeren tot uren / dagen / weken?  concatenatie van waarden per maand?  per zomer?  op welke lengte opslitsen?   nachtelijke uren eruit halen?
+The Elia data [@dataset] is very fine grained and contains $24*4=96$ measurements per day, resulting in $30*24*4=2880$ measurements for a 30 day month.  In order to be able to limit memory and computational resources, we have added the possibility to aggregate these dataset.  Possible choices are **(i)** no aggregation, **(ii)** hourly aggregation, **(iii)** aggregation every 4 hours (starting from 00:00, resulting in 6 values per day), and finally **(iv)** aggregation per day.  Aggregation is done by averaging the values in the selected timeframe.
 
--> aggregaties te voorzien :
+Elia provides a lot of historical data, going back more than 10 years in the past.  We selected 10 years of data (2014-2023), only selecting years containing data for all months.  Furthermore, we wanted to investigate scenario's making sense for the data used.  This means we did not want to mix data of summer months (very high solar power production) with data of winter months (very low solar power production).  We added a selection mechanims for **(i)** taking data of one particular month across all 10 years, and **(ii)** taking data of one particular season (winter, summer) of a single year.  When selecting a single month across all years, all values were concatenated into a single dataseries.  When selecting a season, e.g. summer, all values of the different months of the season were concatenated into a single dataseries.  
 
-- geen 
-- hourly
-- om de 4 uur 
-- om de dag
+Input length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic complexity in $L$.  Taking too few days into acount, it will be difficult to spot similar events in the past.  Taking too many days into account, it will be prohibitely expensive in terms of memory and computational resources to train and evaluate the model.  The dataset and dataloader implemented allowed for a selection of 5, 10 or 20 days.
+
+This is summarized in Table \ref{table:pre-processing-steps}.
+
+
+| step        | description                          | options                                        |
+|:------------|:-------------------------------------|:-----------------------------------------------|
+| aggregation | Reduce number of values by averaging | no aggregation, hourly, 4-hourly, daily        |
+| selection   | Selection of specific months         | same month across 10 years, season in one year |
+| padding     | Selection of input length in days    | 5, 10, 20 days                                 |
+
+Table:  Possible pre-processing steps \label{table:pre-processing-steps}
+
+TODO op welke lengte gaan we onze input datasets opsplitsen
+
+TODO nachtelijke uren eruit halen?
 
 ### Outlier analysis {#sec:outlier}
 
--> check doen op foute waarden, uitschieters
--> we gaan normaal gezien geen waarden verwijderen 
-
+A visual outlier analysis yielded no abnormal or obiously wrong values.  This makes sense, as the data contains actually measured solar power.  Therefore, no values were discarded.
 
 # Methodology and Implementation
 
 ## Research methodology
 
-We started by examining the dataset provided [@dataset].  
+We started by examining the dataset provided [@dataset]. Outlier analysis yielded no results, and we performed a number of standard checks on the quality of the data and decided not to exclude any data from the dataset.  
 
-Beschrijven van de verschillende stappen.
+Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate what the influence on prediction MSE was.  Models were tuned using appropriate hyperparameters using cross-validation.   Several datasets were generated, properly aggregating data and using both seasonal and monthly historical scenario's.  Each model was then used to to predictions on these data sets.   MSE was used as the loss metric.  All analysis was done using the pytorch python package.
 
-All analysis was done using the pytorch python package.
+TODO beschrijven hoe split training / validation / test set.
 
 ## Design elaboration
 
@@ -214,3 +217,8 @@ TODO future work
 ::: {#refs}
 :::
 
+# Appendix A : Data general properties
+
+![Typical recurrent patterns, here for September 2023](figures/recurrent-pattern-september2023.png){#fig:recurrent-pattern-september}
+
+![Typical recurrent patterns, here for January 2023](figures/recurrent-pattern-january2023.png){#fig:recurrent-pattern-january}
