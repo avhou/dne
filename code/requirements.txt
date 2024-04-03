@@ -4,3 +4,5 @@ jupyter
 ipykernel
 xlrd
 sklearn
+tqdm
+matplotlib
