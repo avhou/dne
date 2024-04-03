@@ -1,7 +1,10 @@
 torch
 pandas
 jupyter
+ipykernel
+xlrd
+sklearn
+tqdm
 matplotlib
 seaborn
-xlrd
 scipy
