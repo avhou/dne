@@ -1,41 +1,64 @@
-import pandas as pd
 from typing import Literal
-from pathlib import Path
-class DataLoader:
+import pandas as pd
+import torch
+from torch.utils.data import Dataset
+from sklearn.preprocessing import StandardScaler
 
-    def __init__(self, file_path: Path):
-        """
-        Initializes a DataLoader object.
 
-        Args:
-            file_path (Path): The path to the Excel file.
-        """
-        self.file_path = file_path
+class EliaSolarDataset(Dataset):
+    """
+    A custom dataset class for loading and processing Elia solar data.
 
-    def read_excel(self, aggregation_type: Literal["original", "daily"] = "original"):
-        """
-        Reads the Excel file and returns the data.
+    Args:
+        csv_path (str): The path to the CSV file containing the data.
+        datetime_column (str): The name of the column containing the datetime information.
+        frequency (Literal["15min", "1h", "4h", "D"], optional): The frequency at which to group the data. Defaults to "15min".
 
-        Args:
-            aggregation_type (Literal["original", "daily"], optional): The aggregation type of the data. Defaults to "Original".
+    Attributes:
+        data (pd.DataFrame): The loaded and processed data.
 
-        Returns:
-            pandas.DataFrame: The data read from the Excel file.
+    Methods:
+        __len__(): Returns the length of the dataset.
+        __getitem__(idx): Returns a specific sample from the dataset.
 
-        Raises:
-            FileNotFoundError: If the file is not found.
-            Exception: If any other error occurs during reading.
-        """
-        try:
-            data = pd.read_excel(self.file_path, skiprows=3)
-            data['DateTime'] = pd.to_datetime(data['DateTime'], format="%d/%m/%Y %H:%M")
+    """
 
-            if aggregation_type == "daily":
-                data = data.groupby(pd.Grouper(key='DateTime', freq='D')).sum().reset_index()
+    def __init__(self, csv_path: str, datetime_column: str, frequency: Literal["15min", "1h", "4h", "D"] = "15min"):
+        self.data = pd.read_csv(csv_path)
+        self.data[datetime_column] = pd.to_datetime(self.data[datetime_column])
+        self.data = self.data.groupby(pd.Grouper(key=datetime_column, freq=frequency)).sum().reset_index()
+        self.data["time_idx"] = self.data[datetime_column].dt.year * 12 + self.data[datetime_column].dt.month
+        self.data["time_idx"] -= self.data["time_idx"].min()
+        self.data["month"] = self.data.date.dt.month.astype(str).astype("category")
 
-            return data
-        except FileNotFoundError:
-            print(f"File not found for path: ${self.file_path}.")
-        except Exception as e:
-            print(f"An error occurred: {str(e)}")
+    def __len__(self):
+        return len(self.data)
 
+    def __getitem__(self, idx):
+        sample = self.data.iloc[idx]
+        return sample
+
+
+class StandardScaleTransform(object):
+    """Apply standard scaling to selected columns of a pandas DataFrame."""
+
+    def __init__(self, columns: list[str]):
+        self.columns = columns
+        self.scaler = StandardScaler()
+
+    def __call__(self, sample):
+        data = sample["data"]
+        transformed_data = self.scaler.fit_transform(data)
+        return {"data": transformed_data}
+
+
+class ToTensor(object):
+    """Convert pandas DataFrame to a Tensor."""
+
+    def __init__(self, columns: list[str] = []):
+        self.columns = columns
+
+    def __call__(self, sample):
+        data = sample["data"][self.columns] if self.columns else sample["data"]
+        tensor_data = torch.from_numpy(data.values)
+        return {"data": tensor_data}
