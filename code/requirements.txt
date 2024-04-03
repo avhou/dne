@@ -6,3 +6,5 @@ xlrd
 sklearn
 tqdm
 matplotlib
+seaborn
+scipy

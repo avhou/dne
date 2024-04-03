@@ -1,7 +1,7 @@
 ---
 title: "IM1102-232433M - Deep Neural Engingeering assignment 2"
 subtitle: "Modifying the attention mechanism of transformers for time series forecasting"
-author: "Arne Lescrauwaet (TODO) - Joachim Verschelde (TODO) - Alexander Van Hecke (852631385)"
+author: "Arne Lescrauwaet (852617312) - Joachim Verschelde (TODO) - Alexander Van Hecke (852631385)"
 institute: "OU"
 date: \today
 geometry: margin=2.5cm
@@ -14,7 +14,7 @@ papersize: a4
 
 # Introduction
 
-This report details the steps taken by Arne Lescrauwaet (TODO), Joachim Verschelde (TODO) and Alexander Van Hecke (852631385) for the second assignment of the 2023 Deep Neural Engineering course organised by the Open University [@dne].
+This report details the steps taken by Arne Lescrauwaet (852617312), Joachim Verschelde (TODO) and Alexander Van Hecke (852631385) for the second assignment of the 2023 Deep Neural Engineering course organised by the Open University [@dne].
 
 For this assignment we look at different attention mechanisms in transformers [@transformer] for use with time series data.  The attention mechanism enables a transformer model to selectively focus on relevant parts of the input data.  The goal is to be able to capture long range dependencies and relationships between items of the input data.  This is particularly important for time series data containing recurring patterns, e.g. hourly traffic counts on busy highways and hourly power consumption of nations.  We expect these types of data to contain clear and recurring patterns (i.e. traffic will typically be lower during weekends) and we want an attention mechanism to capture these patterns.  In addition to capturing recurring patterns, we would also like to be able to capture the ``local context'' of a pattern to predict new values.  That is, when encountering an event that is similar to a past event, we want to take the outcome of that past event into account in our prediction.
 
@@ -22,108 +22,138 @@ Different kinds of attention mechanisms exist.  Convolutional self-attention is 
 
 Even though transformers were originally designed in the field of natural language processing (NLP), a lot of work has been done to use transformers with time series data.  An overview of different ways to adapt transformers to time series data is given in [@timeseries1].  The time2vec encoding mechanism is introduced in [@timeseries2].  The authors of this paper use transformer models to predict stock prices, and claim these models can be used both for short and long term predictions.  The effectiveness of applying transformers to time series data is tested in [@timeseries3].
 
-TODO hier korte literature review
-TODO nog meer zoeken naar verschillende attention mechanismen.
-
+The original transformer architecture introduces a quadratic time and space complexity.  Much work has been done to improve on this.  The LogSparse transformer is introduced in [@paper], which reduces the memory cost to $O(L {(\log {}L)}^2)$.  The informer model [@informer] even achieves $O(L {\log {}L)}$ memory complexity.  In this report we will focus on attention mechanisms in the context of time series forecasting, ignoring space and time complexity of the transformer algorithm.
 
 # Goal
 
-In this paper, we focus on using transformers for time series forecasting.  We aim to compare different attention mechanism and determine which mechanism best captures the outcome of past events.
+In this paper, we focus on using transformers for time series forecasting. We aim to compare different attention mechanism and determine which mechanism best captures the outcome of past events.  We formulate a first research question : 
 
-> **RQ : When comparing regular self-attention, convoluted self-attention, xyz self-attention, xyz2 self-attention, which mechanism best predicts future values?**
+> **RQ 1 : When comparing regular self-attention, convoluted self-attention, asymmetric convoluted self-attention and eigenvector based self-attention, which mechanism best predicts future values using mean square error (MSE) as metric?**
 
-TODO nagaan wat we juist willen onderzoeken?  accuracy?  best outcomes capteren (zonder naar resultaat te kijken zegt dit niet veel)?
+The Elia dataset used is fully described in [the dataset description section](#sec:dataset).  It not only contains time series data, but also day+1 and day+7 predictions of the same data.  We formulate a second research question : 
+
+> **RQ 2 : Is the MSE of a transformer model better than the Elia prediction model?**
 
 Firstly, this report will look at the characteristics of the dataset used and discuss pre-processing steps.  Then, we will consider several attention mechanisms,  discuss design and implementation details and finally evaluate the performance of these attention mechanisms on the dataset.
-
-TODO nagaan of we idd performance willen meten.
 
 # Data analysis
 
 ## Dataset description {#sec:dataset}
 
-The layout of the dataset is fully described here [@dataset].  We recap the most important points here.
+We use data from Elia [@elia], which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast datasets.  These contain time series of actual measured power in megawatt (MW), and also  day+1 and day+7 predictions of solar power output in MW.  Data is available for a period of 12 years (February 2012 until now) in monthly datasets.  Measurements and predictions are recorded every quarter of an hour.  The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points in Table \ref{table:features}.
 
-
-| feature | description | range     |
-|:--------|:------------|:----------|
-| todo    | todo        | [0.0-0.0] |
+| feature          | description                           | range                            |
+|:-----------------|:--------------------------------------|:---------------------------------|
+| DateTime         | Date and time per quarter hour        | [00:00 - 24:00] in quarter hours |
+| Measurement      | Measured solar power production in MW | [0.0 - 6000.0]                   |
+| Day+1 prediction | D+1 solar power forecast in MW        | [0.0 - 6000.0]                   |
+| Day+7 prediction | D+7 solar power forecast in MW        | [0.0 - 6000.0]                   |
 
 Table:  Features captured per quarter-hour in @dataset \label{table:features}
 
-TODO outliers
-
-The features are organized as a time series of quarter-hour values.
-
-TODO welke feature of features gaan we bekijken?  Indien solar pv, kijken we ook naar de forecasts van elia zelf?
-
-
 ## Data general properties
 
-TODO spreken over regularity.  zon, dag / nacht, ...  correlation is hier allicht geen concern als we maar 1 feature zouden in beschouwing nemen
+Data is not normally distributed but highly regular and contains obvious day - night recurring patterns.  Since we are using solar power production data, data typically shows no values in the early morning, building towards a peak around noon, and then slowly reducing values towards the evening.  This is illustrated in Figure @{fig:recurrent-pattern-september}.
+
+There are obvious differences in solar power generation between summer months and winter months, but the general pattern remains the same, as illustrated in Figure @{fig:recurrent-pattern-january}.
 
 ## Data pre-processing
 
-TODO omschrijven van de data pre-processing stappen die we gaan nemen.  bv selectie van data (maanden), aggregeren tot uren / dagen / weken?  concatenatie van waarden per maand?  per zomer?  op welke lengte opslitsen?   nachtelijke uren eruit halen?
+The Elia data [@dataset] is very fine grained and contains $24*4=96$ measurements per day, resulting in $30*24*4=2880$ measurements for a 30 day month.  In order to be able to limit memory and computational resources, we have added the possibility to aggregate these dataset.  Possible choices are **(i)** no aggregation, **(ii)** hourly aggregation, **(iii)** aggregation every 4 hours (starting from 00:00, resulting in 6 values per day), and finally **(iv)** aggregation per day.  Aggregation is done by averaging the values in the selected timeframe.
 
-### PCA analysis
+Elia provides a lot of historical data, going back more than 10 years in the past.  We selected 10 years of data (2014-2023), only selecting years containing data for all months.  Furthermore, we wanted to investigate scenarios making sense for the data used.  This means we did not want to mix data of summer months (very high solar power production) with data of winter months (very low solar power production).  We added a selection mechanims for **(i)** taking data of one particular month across all 10 years, and **(ii)** taking data of one particular season (winter, summer) of a single year.  When selecting a single month across all years, all values were concatenated into a single dataseries.  When selecting a season, e.g. summer, all values of the different months of the season were concatenated into a single dataseries.  
 
-TODO NVT?
+Input length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic complexity in $L$.  Taking too few days into acount, it will be difficult to spot similar events in the past.  Taking too many days into account, it will be prohibitely expensive in terms of memory and computational resources to train and evaluate the model.  The dataset and dataloader implemented allowed for a selection of 5, 10 or 20 days.
 
-### Duplicates analysis
+This is summarized in Table \ref{table:pre-processing-steps}.
 
-TODO NVT?
+
+| step        | description                          | options                                        |
+|:------------|:-------------------------------------|:-----------------------------------------------|
+| aggregation | Reduce number of values by averaging | no aggregation, hourly, 4-hourly, daily        |
+| selection   | Selection of specific months         | same month across 10 years, season in one year |
+| padding     | Selection of input length in days    | 5, 10, 20 days                                 |
+
+Table:  Possible pre-processing steps \label{table:pre-processing-steps}
+
+TODO nachtelijke uren eruit halen?
 
 ### Outlier analysis {#sec:outlier}
 
-TODO NVT?
-
+A visual outlier analysis yielded no abnormal or obiously wrong values.  This makes sense, as the data contains actually measured solar power.  Therefore, no values were discarded.
 
 # Methodology and Implementation
 
 ## Research methodology
 
-We started by examining the dataset provided [@dataset].  
+We started by examining the dataset provided [@dataset]. Outlier analysis yielded no results, and we performed a number of standard checks on the quality of the data and decided not to exclude any data from the dataset.  
 
-Beschrijven van de verschillende stappen.
+Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate influence on prediction MSE.  Models were tuned using appropriate hyperparameters using TODO TODO TODO cross-validation.   Several datasets were generated, properly aggregating data and using both seasonal and monthly historical scenario's.  Each model was then used to to predictions on these data sets.   MSE was used as the loss metric.  
 
-All analysis was done using the pytorch python package.
+TODO beschrijven hoe split training / validation / test set.
 
 ## Design elaboration
 
-We decided to evaluate the following attention mechanisms : 
+We decided to evaluate the following attention mechanisms (Table \ref{table:attention-mechanisms}) : 
 
-- regular self-attention
-- convoluted self-attention as described in [@paper]
-- XYZ
-- XYZ
+- regular self-attention (AM-1).  This is the mechanism described in the original transformer paper [@transformer].
+- convoluted self-attention as described in [@paper] (AM-2).  This is the mechanism described in [@paper].  It generalizes the regular self-attention mechanism and uses a 1D convolution to transform the Query (Q) and Key (K) values before using them in the transformer architecture.
+- asymmetric convoluted self-attention (AM-3).  This is a variation of the mechanism described in [@paper].  Whereas [@paper] uses a symmetric convolution, here we use a (right-)asymmetric convolution to transfer Q and K values before using them in the transformer architecture.
+- eigenvector based self-attention (AM-4).  This uses eigenvectors as a measure of similarity between keys and values to determine where to direct attention.
 
-TODO experiment beschrijven naar dataset of datasets, parameters (bv kernel size) en hyperparameters (indien van toepassing)
 
-| algo                      | parameter   | range |
-|:--------------------------|:------------|------:|
-| regular self-attention    | ?           |     ? |
-| convoluted self-attention | kernel size |  2-10 |
-| XYZ                       | ?           |     ? |
+| attention mechanism                  | abbreviation |
+|:-------------------------------------|:-------------|
+| regular self-attention               | AM-1         |
+| convoluted self-attention            | AM-2         |
+| asymmetric convoluted self-attention | AM-3         |
+| eigenvector self-attention           | AM-4         |
 
-Table: parameters used for the attention mechanisms \label{table:parameters}
+Table:  Attention mechanisms \label{table:attention-mechanisms}
 
-TODO indien meerdere scenarios (bv meerdere datasets, of een scenario zomer/winter/...)  hier opsommen van scenarios
+
+TODO extra features / embedding
+
+-> feature + positional encoding + one-hot encoding van dag of maand of week "temporal encoding"
+
+TODO verder verduidelijken
+
+We start by splitting the dataset (feature X and target vector y) in a training set (35%, X~train~ and y~train~), a validation set (35%, X~validation~ and y~validation~) and a test set (30%, X~test~ and y~test~).  Then, a grid search with cross-validation is used to train the model on the training data and validate it against the validation set.  The grid search is parameterized by relevant parameters specific to the self-attention mechanism, see Table \ref{table:hyperparameters}.  Attention heads are varied between 2 and 8 in increments of 2.  For the convolution based attention mechanisms, we investigate kernel sizes ranging from 3 to 9 in increments of 2.  We use MSE as a measure to optimize for.  
+
+
+| attention mechanism | hyperparameter |              range |
+|:--------------------|:---------------|-------------------:|
+| AM-1                | attention head | range(2, 8) step 2 |
+| AM-2                | attention head | range(2, 8) step 2 |
+| AM-2                | kernel size    | range(3, 9) step 2 |
+| AM-3                | attention head | range(2, 8) step 2 |
+| AM-3                | kernel size    | range(3, 9) step 2 |
+| AM-4                | attention head | range(2, 8) step 2 |
+
+Table: hyperparameters used for the transformer models \label{table:hyperparameters}
+
+In each iteration, we run the grid search using the training data, and predict against the test data (y~predicted_test~).  All predictions are stored for later analysis.  
 
 This entire design is repeated for a number of different scenarios.  We detail these in Table \ref{table:scenarios}.
 
-| scenario | description              |
-|:---------|:-------------------------|
-| summer   | TODO july - september    |
-| winter   | TODO december - february |
+- scenario summer-season : In this scenario, we aim to investigate recurring events in the most sunny season of one year.  We concatenate all data of June, July, and August of 2023.
+- scenario winter-season : In this scenario, we aim to investigate recurring events in the least sunny season of one year.  We concatenate all data of December, January and February of 2023.
+- scenario summer-month : In this scenario, we aim to investigate recurring events in the most sunny month of all years (period 2014-2023).  We concatenate all data of August for years 2014-2023.
+- scenario winter-month : In this scenario, we aim to investigate recurring events in the least sunny month of all years (period 2014-2023).  We concatenate all data of February for years 2014-2023.
+
+
+| scenario      | description                                              |
+|:--------------|:---------------------------------------------------------|
+| summer-season | concatenation of June, July, and August of 2023          |
+| winter-season | concatenation of December, January, and February of 2023 |
+| summer-month  | concatenation of August data of period 2014-2023         |
+| winter-month  | concatenation of February data of period 2014-2023       |
 
 Table: learning scenarios \label{table:scenarios}
 
 ## Implementation
 
-All code is available in a github repository [@github].
-
-TODO eventueel speciale vermeldingen rond implementatie
+All code and data is available in a github repository [@github].  All deep learning models were implemented using the pytorch python package.  
 
 # Evaluation and Results
 
@@ -137,40 +167,37 @@ To evaluate whether ... TODO ... self-attention ... , we formulate the following
 
 If the p-value is below $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that there is indeed a difference between the TODO.  
 
+-> vergelijken met base line voorspellingen elia?
+-> regressieanalyse van de residuals.
+
 ## Results
 
-### Scenario 1 : Regular self-attention
+### Scenario 1 : summer-season
 
-This is the baseline scenario.  Results are summarized in Table \ref{table:ttest-original}.
+This scenario uses data for June, July and August of 2023 for forecasting.  Results are summarized in Table \ref{table:ttest-original}.
 
-| metric   | metric mean | population mean | t-test value |  p-value | H~0~ rejected |
-|----------|------------:|----------------:|-------------:|---------:|:-------------:|
-| accuracy |      0.9580 |          0.9864 |    -1.77E+01 | 2.29E-32 | yes           |
-| accuracy |      0.9858 |          0.9864 |    -1.84E+01 | 1.17E-33 | yes           |
-| accuracy |      0.9782 |          0.9864 |    -2.58E+01 | 9.62E-46 | yes           |
+| mechanism | metric mean | AM-1 mean | t-test value |  p-value | H~0~ rejected |
+|-----------|------------:|----------:|-------------:|---------:|:-------------:|
+| MA-2      |      0.9580 |    0.9864 |    -1.77E+01 | 2.29E-32 | yes           |
+| MA-3      |      0.9858 |    0.9864 |    -1.84E+01 | 1.17E-33 | yes           |
+| MA-4      |      0.9782 |    0.9864 |    -2.58E+01 | 9.62E-46 | yes           |
 
 
 Table: one sample t-test to determine whether TODO \label{table:ttest-original}
 
 TODO resultaten beschrijven
 
-### Scenario 2 : Convoluted self-attention
+### Scenario 2 : winter-season
 
 TODO idem hierboven
 
-### Recap
+### Scenario 3 : summer-month
 
-TODO hier summary van scenarios
+TODO idem hierboven
 
-| scenario         | attention mechanism    | TODO              |
-|:-----------------|:-----------------------|:------------------|
-| summer           | regular self-attention | ?                 |
-| summer           | convoluted self-attention | ?                 |
-| winter           | regular self-attention | ?                 |
-| winter           | convoluted self-attention | ?                 |
+### Scenario 4 : winter-month
 
-Table: Features importance summary \label{table:features-importance}
-
+TODO idem hierboven
 
 # Conclusions and Discussion
 
@@ -190,3 +217,8 @@ TODO future work
 ::: {#refs}
 :::
 
+# Appendix A : Data general properties
+
+![Typical recurrent patterns, here for September 2023](figures/recurrent-pattern-september2023.png){#fig:recurrent-pattern-september}
+
+![Typical recurrent patterns, here for January 2023](figures/recurrent-pattern-january2023.png){#fig:recurrent-pattern-january}
