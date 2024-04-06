@@ -264,6 +264,7 @@ class ScenarioParams:
     dataloader_validation: Any
     dataloader_test: Any
     base_path: str
+    early_stop_count: int = 5
 
 
 @dataclass
@@ -364,7 +365,7 @@ class Scenario:
 
             if avg_val_loss >= min_val_loss:
                 early_stop_count += 1
-                if early_stop_count >= 5:
+                if early_stop_count >= self.params.early_stop_count:
                     print("Early stopping!")
                     break
             else:
