@@ -263,6 +263,7 @@ class ScenarioParams:
     dataloader_train: Any
     dataloader_validation: Any
     dataloader_test: Any
+    base_path: str
 
 
 @dataclass
@@ -327,7 +328,12 @@ class Scenario:
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=5, verbose=True)
         scaler = torch.cuda.amp.GradScaler() if torch.cuda.is_available() else None
-        os.makedirs('./weights', exist_ok=True)
+
+        print(f"checking paths, base path is {self.params.base_path}")
+        weights_dir = os.path.join(self.params.base_path, "weights")
+        if not os.path.exists(weights_dir):
+            print(f"creating directory {weights_dir}")
+            os.makedirs(weights_dir, exist_ok=True)
 
         for epoch in range(self.params.epochs):
             avg_train_loss = self.train_one_epoch(model, self.params.dataloader_train, self.params.device, optimizer, criterion, scaler)
@@ -368,9 +374,20 @@ class Scenario:
 
         if best_model_state:
             model_type = "train" if best_model_state["type"] == "train" else "val"
-            path = f'./weights/{self.params.name}_model_best_{model_type}.pth'
+            path = os.path.join(weights_dir, f'{self.params.name}_model_best_{model_type}.pth')
             torch.save(best_model_state["state_dict"], path)
-            print(f"Best {model_type} model saved from epoch {best_model_state['epoch']+1}")
+            print(f"Best {model_type} model saved to file {path} from epoch {best_model_state['epoch']+1}")
 
         return ScenarioResult(val_losses, train_losses)
+
+def to_sequences(seq_size, obs):
+    x = []
+    y = []
+    for i in range(len(obs) - seq_size):
+        window = obs[i:(i + seq_size)]
+        after_window = obs[i + seq_size]
+        x.append(window)
+        y.append(after_window)
+    return torch.tensor(x, dtype=torch.float32).view(-1, seq_size,1), torch.tensor(y, dtype=torch.float32).view(-1, 1)
+
 

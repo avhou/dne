@@ -1,7 +1,7 @@
 ---
 title: "IM1102-232433M - Deep Neural Engingeering assignment 2"
 subtitle: "Modifying the attention mechanism of transformers for time series forecasting"
-author: "Arne Lescrauwaet (852617312) - Joachim Verschelde (TODO) - Alexander Van Hecke (852631385)"
+author: "Arne Lescrauwaet (852617312) - Joachim Verschelde (852594432) - Alexander Van Hecke (852631385)"
 institute: "OU"
 date: \today
 geometry: margin=2.5cm
@@ -14,7 +14,7 @@ papersize: a4
 
 # Introduction
 
-This report details the steps taken by Arne Lescrauwaet (852617312), Joachim Verschelde (TODO) and Alexander Van Hecke (852631385) for the second assignment of the 2023 Deep Neural Engineering course organised by the Open University [@dne].
+This report details the steps taken by Arne Lescrauwaet (852617312), Joachim Verschelde (852594432) and Alexander Van Hecke (852631385) for the second assignment of the 2023 Deep Neural Engineering course organised by the Open University [@dne].
 
 For this assignment we look at different attention mechanisms in transformers [@transformer] for use with time series data.  The attention mechanism enables a transformer model to selectively focus on relevant parts of the input data.  The goal is to be able to capture long range dependencies and relationships between items of the input data.  This is particularly important for time series data containing recurring patterns, e.g. hourly traffic counts on busy highways and hourly power consumption of nations.  We expect these types of data to contain clear and recurring patterns (i.e. traffic will typically be lower during weekends) and we want an attention mechanism to capture these patterns.  In addition to capturing recurring patterns, we would also like to be able to capture the ``local context'' of a pattern to predict new values.  That is, when encountering an event that is similar to a past event, we want to take the outcome of that past event into account in our prediction.
 
@@ -61,7 +61,7 @@ There are obvious differences in solar power generation between summer months an
 
 The Elia data [@dataset] is very fine grained and contains $24*4=96$ measurements per day, resulting in $30*24*4=2880$ measurements for a 30 day month.  In order to be able to limit memory and computational resources, we have added the possibility to aggregate these dataset.  Possible choices are **(i)** no aggregation, **(ii)** hourly aggregation, **(iii)** aggregation every 4 hours (starting from 00:00, resulting in 6 values per day), and finally **(iv)** aggregation per day.  Aggregation is done by averaging the values in the selected timeframe.
 
-Elia provides a lot of historical data, going back more than 10 years in the past.  We selected 10 years of data (2014-2023), only selecting years containing data for all months.  Furthermore, we wanted to investigate scenarios making sense for the data used.  This means we did not want to mix data of summer months (very high solar power production) with data of winter months (very low solar power production).  We added a selection mechanims for **(i)** taking data of one particular month across all 10 years, and **(ii)** taking data of one particular season (winter, summer) of a single year.  When selecting a single month across all years, all values were concatenated into a single dataseries.  When selecting a season, e.g. summer, all values of the different months of the season were concatenated into a single dataseries.  
+Elia provides a lot of historical data, going back more than 10 years in the past.  We selected 10 years of data (2014-2023), only selecting years containing data for all months.  Furthermore, we wanted to investigate scenarios making sense for the data used.  This means we did not want to mix data of summer months (very high solar power production) with data of winter months (very low solar power production).  We added a selection mechanim for **(i)** taking data of one particular month across all 10 years, and **(ii)** taking data of one particular season (winter, summer) of a single year.  When selecting a single month across all years, all values were concatenated into a single dataseries.  When selecting a season, e.g. summer, all values of the different months of the season were concatenated into a single dataseries.  
 
 Input length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic complexity in $L$.  Taking too few days into acount, it will be difficult to spot similar events in the past.  Taking too many days into account, it will be prohibitely expensive in terms of memory and computational resources to train and evaluate the model.  The dataset and dataloader implemented allowed for a selection of 5, 10 or 20 days.
 
