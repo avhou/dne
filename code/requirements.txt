@@ -4,7 +4,7 @@ pandas
 jupyter
 ipykernel
 xlrd
-sklearn
+scikit-learn
 tqdm
 matplotlib
 seaborn
