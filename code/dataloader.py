@@ -1,8 +1,9 @@
-from typing import Literal
+from typing import Callable, Literal, Optional
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from sklearn.preprocessing import StandardScaler
+import numpy as np
 
 
 class EliaSolarDataset(Dataset):
@@ -23,33 +24,52 @@ class EliaSolarDataset(Dataset):
 
     """
 
-    def __init__(self, csv_path: str, datetime_column: str, frequency: Literal["15min", "1h", "4h", "D"] = "15min"):
+    def __init__(
+        self,
+        csv_path: str,
+        datetime_column: str,
+        target_column: str,
+        context_length: int = 120,
+        frequency: Literal["15min", "1h", "4h", "D"] = "1h",
+        transform: Optional[Callable] = None,
+    ):
         self.data = pd.read_csv(csv_path)
         self.data[datetime_column] = pd.to_datetime(self.data[datetime_column])
         self.data = self.data.groupby(pd.Grouper(key=datetime_column, freq=frequency)).sum().reset_index()
+        self.data = self.data[[datetime_column, target_column]]
+        scaler = StandardScaler()
+        self.data = scaler.fit_transform(self.data)
         self.data["time_idx"] = self.data[datetime_column].dt.year * 12 + self.data[datetime_column].dt.month
         self.data["time_idx"] -= self.data["time_idx"].min()
-        self.data["month"] = self.data.date.dt.month.astype(str).astype("category")
+        self.data = pd.get_dummies(self.data, columns=["month"])
+        self.transform = transform
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        sample = self.data.iloc[idx]
+        sample = {"data": self.data.iloc[idx]}
+        if self.transform:
+            sample = self.transform(sample)
         return sample
 
 
-class StandardScaleTransform(object):
-    """Apply standard scaling to selected columns of a pandas DataFrame."""
+class CreateSequences(object):
+    """Create sequences from a pandas DataFrame."""
 
-    def __init__(self, columns: list[str]):
-        self.columns = columns
-        self.scaler = StandardScaler()
+    def __init__(self, context_length: int = 120):
+        self.context_length = context_length
 
     def __call__(self, sample):
         data = sample["data"]
-        transformed_data = self.scaler.fit_transform(data)
-        return {"data": transformed_data}
+        data = data.drop(columns=["DateTime"])
+        data = data.to_numpy()
+        x = np.zeros((len(data) - self.context_length - self.target_length + 1, self.context_length, data.shape[1]))
+        y = np.zeros((len(data) - self.context_length - self.target_length + 1, self.target_length, data.shape[1]))
+        for i in range(len(data) - self.context_length - self.target_length + 1):
+            x[i] = data[i : i + self.context_length]
+            y[i] = data[i + self.context_length : i + self.context_length + self.target_length]
+        return {"data": x, "target": y}
 
 
 class ToTensor(object):
