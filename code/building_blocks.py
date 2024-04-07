@@ -1,5 +1,6 @@
 # common classes
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from dataclasses import dataclass
@@ -271,6 +272,7 @@ class ScenarioParams:
 class ScenarioResult:
     validation_losses: List[float]
     train_losses: List[float]
+    test_losses: List[float]
 
 
 @dataclass
@@ -336,6 +338,7 @@ class Scenario:
             print(f"creating directory {weights_dir}")
             os.makedirs(weights_dir, exist_ok=True)
 
+        print(f"training and validating the model")
         for epoch in range(self.params.epochs):
             avg_train_loss = self.train_one_epoch(model, self.params.dataloader_train, self.params.device, optimizer, criterion, scaler)
             train_losses.append(avg_train_loss)
@@ -364,6 +367,7 @@ class Scenario:
             scheduler.step(avg_val_loss)
 
             if avg_val_loss >= min_val_loss:
+                print(f"increasing early stop count")
                 early_stop_count += 1
                 if early_stop_count >= self.params.early_stop_count:
                     print("Early stopping!")
@@ -379,7 +383,27 @@ class Scenario:
             torch.save(best_model_state["state_dict"], path)
             print(f"Best {model_type} model saved to file {path} from epoch {best_model_state['epoch']+1}")
 
-        return ScenarioResult(val_losses, train_losses)
+        print(f"testing the model")
+        model.eval()
+        test_losses = []
+        with torch.no_grad():
+            for x_batch, y_batch in self.params.dataloader_test:
+                outputs, attention = model(x_batch.to(self.params.device))
+                loss = criterion(outputs, y_batch.to(self.params.device))
+                test_losses.append(loss.item())
+
+        print(f"saving all losses to disk")
+        path = os.path.join(weights_dir, f'{self.params.name}_train_val_losses.pkl')
+        pd.DataFrame({
+            'training': train_losses,
+            'validation': val_losses
+        }).to_pickle(path)
+        path = os.path.join(weights_dir, f'{self.params.name}_test_losses.pkl')
+        pd.DataFrame({
+            'test': test_losses
+        }).to_pickle(path)
+
+        return ScenarioResult(val_losses, train_losses, test_losses)
 
 def to_sequences(seq_size, obs):
     x = []
