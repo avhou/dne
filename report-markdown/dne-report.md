@@ -1,7 +1,7 @@
 ---
 title: "IM1102-232433M - Deep Neural Engingeering assignment 2"
 subtitle: "Modifying the attention mechanism of transformers for time series forecasting"
-author: "Arne Lescrauwaet (852617312) - Joachim Verschelde (852594432) - Alexander Van Hecke (852631385)"
+author: "Arne Lescrauwaet - Joachim Verschelde - Alexander Van Hecke"
 institute: "OU"
 date: \today
 geometry: margin=2.5cm
@@ -90,7 +90,8 @@ We started by examining the dataset provided [@dataset]. Outlier analysis yielde
 
 Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate influence on prediction MSE.  Models were tuned using appropriate hyperparameters using TODO TODO TODO cross-validation.   Several datasets were generated, properly aggregating data and using both seasonal and monthly historical scenario's.  Each model was then used to to predictions on these data sets.   MSE was used as the loss metric.  
 
-TODO beschrijven hoe split training / validation / test set.
+Data was split in a training part (TODO %), a validation part (TODO %), and a test part (TODO %).  
+TODO beschrijven hoe split training / validation / test set.  gaan we aaneensluitende blokken gebruiken of random rijen tot de percenten opgevuld zijn?
 
 ## Design elaboration
 
@@ -112,6 +113,9 @@ We decided to evaluate the following attention mechanisms (Table \ref{table:atte
 Table:  Attention mechanisms \label{table:attention-mechanisms}
 
 
+Feature embedding was done using a combination of both positional encoding and a more specific temporal encoding, taking into account month and year of the data.  The temporal encoding is added as a one-hot encoding to the input vector and serves as an additional clue for the transformer model to link similar events.
+
+TODO waarom enkel maand / jaar, en niet dag?
 TODO extra features / embedding
 
 -> feature + positional encoding + one-hot encoding van dag of maand of week "temporal encoding"
