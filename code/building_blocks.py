@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+import math
 from dataclasses import dataclass
 from typing import *
 import torch.optim as optim
@@ -10,7 +11,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import os
 
 
-#%%
+# %%
 ### Attention mechanism copied from Aladin Persson
 ### see https://github.com/aladdinpersson/Machine-Learning-Collection/tree/master/ML/Pytorch/more_advanced/transformer_from_scratch
 class SelfAttention(nn.Module):
@@ -20,9 +21,7 @@ class SelfAttention(nn.Module):
         self.heads = heads
         self.head_dim = embed_size // heads
 
-        assert (
-                self.head_dim * heads == embed_size
-        ), "Embedding size needs to be divisible by heads"
+        assert self.head_dim * heads == embed_size, "Embedding size needs to be divisible by heads"
 
         self.values = nn.Linear(embed_size, embed_size)
         self.keys = nn.Linear(embed_size, embed_size)
@@ -55,7 +54,7 @@ class SelfAttention(nn.Module):
 
         # Mask padded indices so their weights become 0
         if mask is not None:
-            energy = energy.masked_fill(mask == 0,  float(-1e+30) if energy.dtype == torch.float32 else -float(1e+4))
+            energy = energy.masked_fill(mask == 0, float(-1e30) if energy.dtype == torch.float32 else -float(1e4))
 
         # Normalize energy values similarly to seq2seq + attention
         # so that they sum to 1. Also divide by scaling factor for
@@ -63,9 +62,7 @@ class SelfAttention(nn.Module):
         attention = torch.softmax(energy / (self.embed_size ** (1 / 2)), dim=3)
         # attention shape: (N, heads, query_len, key_len)
 
-        out = torch.einsum("nhql,nlhd->nqhd", [attention, values]).reshape(
-            N, query_len, self.heads * self.head_dim
-        )
+        out = torch.einsum("nhql,nlhd->nqhd", [attention, values]).reshape(N, query_len, self.heads * self.head_dim)
         # attention shape: (N, heads, query_len, key_len)
         # values shape: (N, value_len, heads, heads_dim)
         # out after matrix multiply: (N, query_len, heads, head_dim), then
@@ -115,24 +112,49 @@ class PositionalEncoding(nn.Module):
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('pe', pe)
+        self.register_buffer("pe", pe)
 
     def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
+        x = x + self.pe[: x.size(0), :]
         return self.dropout(x)
+
+
+class TemporalEncoding(nn.Module):
+    def __init__(self, d_model, frequency: Literal["15min", "1h", "d"] = "1h"):
+        super(TemporalEncoding, self).__init__()
+
+        hour_size = 24
+        weekday_size = 7
+        day_size = 32
+        month_size = 13
+
+        self.hour_embed = nn.Embedding(hour_size, d_model) if frequency in ["1h", "15min"] else 0
+        self.weekday_embed = nn.Embedding(weekday_size, d_model)
+        self.day_embed = nn.Embedding(day_size, d_model)
+        self.month_embed = nn.Embedding(month_size, d_model)
+
+    def forward(self, x):
+        x = x.long()
+
+        hour_x = self.hour_embed(x[:, :, 3])
+        weekday_x = self.weekday_embed(x[:, :, 2])
+        day_x = self.day_embed(x[:, :, 1])
+        month_x = self.month_embed(x[:, :, 0])
+
+        return hour_x + weekday_x + day_x + month_x
 
 
 ### Encoder
 class TimeSeriesEncoder(nn.Module):
     def __init__(
-            self,
-            input_dim,
-            embed_size,
-            num_layers,
-            heads,
-            device,
-            forward_expansion,
-            dropout,
+        self,
+        input_dim,
+        embed_size,
+        num_layers,
+        heads,
+        device,
+        forward_expansion,
+        dropout,
     ):
 
         super(TimeSeriesEncoder, self).__init__()
@@ -143,6 +165,7 @@ class TimeSeriesEncoder(nn.Module):
 
         self.feature_embedding = nn.Linear(input_dim, embed_size)
         self.pos_embedding = PositionalEncoding(embed_size)
+        self.temporal_embedding = TemporalEncoding(embed_size, frequency="1h")
 
         self.dropout = nn.Dropout(dropout)
 
@@ -159,14 +182,15 @@ class TimeSeriesEncoder(nn.Module):
         )
 
     def forward(self, x, mask):
-        #print(f"input shape:{x.shape}")
+        # print(f"input shape:{x.shape}")
         feature_embed = self.dropout(self.feature_embedding(x.squeeze()))
         feature_embed = feature_embed.unsqueeze(1).expand(-1, self.input_dim, -1)
-        #print(f"feature_embed shape:{feature_embed.shape}")
+        # print(f"feature_embed shape:{feature_embed.shape}")
         pos_embed = self.dropout(self.pos_embedding(x))
-        #print(f"pos_embed shape:{pos_embed.shape}")
+        # print(f"pos_embed shape:{pos_embed.shape}")
+        temporal_embed = self.temporal_embedding(x)
 
-        input_embedding = feature_embed + pos_embed
+        input_embedding = feature_embed + pos_embed + temporal_embed
         attention_layers = []
 
         for layer in self.layers:
@@ -205,37 +229,16 @@ class TimeSeriesTransformerParams:
 
 ### Transformer
 class TimeSeriesTransformer(nn.Module):
-    def __init__(
-            self,
-            input_dim,
-            embed_size,
-            num_layers,
-            heads,
-            device,
-            forward_expansion,
-            dropout,
-            forecast_size=1
-    ):
+    def __init__(self, input_dim, embed_size, num_layers, heads, device, forward_expansion, dropout, forecast_size=1):
         super(TimeSeriesTransformer, self).__init__()
 
-        self.encoder = TimeSeriesEncoder(
-            input_dim,
-            embed_size,
-            num_layers,
-            heads,
-            device,
-            forward_expansion,
-            dropout
-        )
+        self.encoder = TimeSeriesEncoder(input_dim, embed_size, num_layers, heads, device, forward_expansion, dropout)
 
-        self.decoder = TimeSeriesLinearDecoder(
-            embed_size,
-            forecast_size
-        )
+        self.decoder = TimeSeriesLinearDecoder(embed_size, forecast_size)
 
     def make_mask(self, x):
         seq_length = x.shape[1]
-        return torch.triu(torch.ones(seq_length, seq_length) * float('-inf'), diagonal=1).to(x.device)
+        return torch.triu(torch.ones(seq_length, seq_length) * float("-inf"), diagonal=1).to(x.device)
 
     def forward(self, x):
         mask = self.make_mask(x)
@@ -246,15 +249,16 @@ class TimeSeriesTransformer(nn.Module):
 
     def from_params(params: TimeSeriesTransformerParams):
         return TimeSeriesTransformer(
-           input_dim=params.input_dim,
-           embed_size=params.embed_size,
-           num_layers=params.num_layers,
-           heads=params.heads,
-           device=params.device,
-           forward_expansion=params.forward_expansion,
-           dropout=params.dropout,
-           forecast_size=params.forecast_size
+            input_dim=params.input_dim,
+            embed_size=params.embed_size,
+            num_layers=params.num_layers,
+            heads=params.heads,
+            device=params.device,
+            forward_expansion=params.forward_expansion,
+            dropout=params.dropout,
+            forecast_size=params.forecast_size,
         )
+
 
 @dataclass
 class ScenarioParams:
@@ -283,7 +287,9 @@ class Scenario:
         model.train()
         train_loss_batch = []
         for batch in train_loader:
+            print(f"batch: {batch}")
             x_batch, y_batch = batch
+            print(f"xbatch: {x_batch}, ybatch: {y_batch}")
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
 
             if torch.cuda.is_available():
@@ -319,17 +325,16 @@ class Scenario:
         avg_val_loss = np.mean(val_loss_batch)
         return avg_val_loss
 
-
     def execute(self, model) -> ScenarioResult:
-        min_train_loss = float('inf')
-        min_val_loss = float('inf')
+        min_train_loss = float("inf")
+        min_val_loss = float("inf")
         best_model_state = None
         early_stop_count = 0
         train_losses = []
         val_losses = []
         criterion = nn.MSELoss()
         optimizer = optim.Adam(model.parameters(), lr=0.001)
-        scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=5, verbose=True)
+        scheduler = ReduceLROnPlateau(optimizer, "min", factor=0.5, patience=5, verbose=True)
         scaler = torch.cuda.amp.GradScaler() if torch.cuda.is_available() else None
 
         print(f"checking paths, base path is {self.params.base_path}")
@@ -340,16 +345,14 @@ class Scenario:
 
         print(f"training and validating the model")
         for epoch in range(self.params.epochs):
-            avg_train_loss = self.train_one_epoch(model, self.params.dataloader_train, self.params.device, optimizer, criterion, scaler)
+            avg_train_loss = self.train_one_epoch(
+                model, self.params.dataloader_train, self.params.device, optimizer, criterion, scaler
+            )
             train_losses.append(avg_train_loss)
 
             if avg_train_loss < min_train_loss:
                 min_train_loss = avg_train_loss
-                best_model_state = {
-                    "state_dict": model.state_dict(),
-                    "epoch": epoch,
-                    "type": "train"
-                }
+                best_model_state = {"state_dict": model.state_dict(), "epoch": epoch, "type": "train"}
                 print(f"New best training score at epoch {epoch+1}")
 
             avg_val_loss = self.validate(model, self.params.dataloader_validation, self.params.device, criterion)
@@ -357,11 +360,7 @@ class Scenario:
 
             if avg_val_loss < min_val_loss:
                 min_val_loss = avg_val_loss
-                best_model_state = {
-                    "state_dict": model.state_dict(),
-                    "epoch": epoch,
-                    "type": "val"
-                }
+                best_model_state = {"state_dict": model.state_dict(), "epoch": epoch, "type": "val"}
                 print(f"New best validation score at epoch {epoch+1}")
 
             scheduler.step(avg_val_loss)
@@ -375,11 +374,13 @@ class Scenario:
             else:
                 early_stop_count = 0
 
-            print(f"Epoch {epoch + 1}/{self.params.epochs}, Training Loss: {train_losses[-1]:.4f}, Validation Loss: {val_losses[-1]:.4f}")
+            print(
+                f"Epoch {epoch + 1}/{self.params.epochs}, Training Loss: {train_losses[-1]:.4f}, Validation Loss: {val_losses[-1]:.4f}"
+            )
 
         if best_model_state:
             model_type = "train" if best_model_state["type"] == "train" else "val"
-            path = os.path.join(weights_dir, f'{self.params.name}_model_best_{model_type}.pth')
+            path = os.path.join(weights_dir, f"{self.params.name}_model_best_{model_type}.pth")
             torch.save(best_model_state["state_dict"], path)
             print(f"Best {model_type} model saved to file {path} from epoch {best_model_state['epoch']+1}")
 
@@ -405,14 +406,13 @@ class Scenario:
 
         return ScenarioResult(val_losses, train_losses, test_losses)
 
+
 def to_sequences(seq_size, obs):
     x = []
     y = []
     for i in range(len(obs) - seq_size):
-        window = obs[i:(i + seq_size)]
+        window = obs[i : (i + seq_size)]
         after_window = obs[i + seq_size]
         x.append(window)
         y.append(after_window)
-    return torch.tensor(x, dtype=torch.float32).view(-1, seq_size,1), torch.tensor(y, dtype=torch.float32).view(-1, 1)
-
-
+    return torch.tensor(x, dtype=torch.float32).view(-1, seq_size, 1), torch.tensor(y, dtype=torch.float32).view(-1, 1)
