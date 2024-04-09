@@ -206,6 +206,7 @@ for elia_dataset_hash in tqdm(elia_dataset_hashes, desc="Downloading Elia solar 
     file_paths.append(file_path)
 
 full_df = concat_elia_datasets(file_paths)
+full_df["DateTime"] = pd.to_datetime(full_df["DateTime"], format="%d/%m/%Y %H:%M")
 full_df.sort_values(by="DateTime", inplace=True)
 full_df.to_csv(target_file_path, index=False)
 [os.remove(file_path) for file_path in file_paths]
