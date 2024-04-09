@@ -287,9 +287,7 @@ class Scenario:
         model.train()
         train_loss_batch = []
         for batch in train_loader:
-            print(f"batch: {batch}")
             x_batch, y_batch = batch
-            print(f"xbatch: {x_batch}, ybatch: {y_batch}")
             x_batch, y_batch = x_batch.to(device), y_batch.to(device)
 
             if torch.cuda.is_available():
@@ -394,15 +392,10 @@ class Scenario:
                 test_losses.append(loss.item())
 
         print(f"saving all losses to disk")
-        path = os.path.join(weights_dir, f'{self.params.name}_train_val_losses.pkl')
-        pd.DataFrame({
-            'training': train_losses,
-            'validation': val_losses
-        }).to_pickle(path)
-        path = os.path.join(weights_dir, f'{self.params.name}_test_losses.pkl')
-        pd.DataFrame({
-            'test': test_losses
-        }).to_pickle(path)
+        path = os.path.join(weights_dir, f"{self.params.name}_train_val_losses.pkl")
+        pd.DataFrame({"training": train_losses, "validation": val_losses}).to_pickle(path)
+        path = os.path.join(weights_dir, f"{self.params.name}_test_losses.pkl")
+        pd.DataFrame({"test": test_losses}).to_pickle(path)
 
         return ScenarioResult(val_losses, train_losses, test_losses)
 

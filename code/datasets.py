@@ -14,9 +14,11 @@ class EliaSolarDataset(Dataset):
         csv_path (str): The path to the CSV file containing the dataset.
         datetime_column (str): The name of the column containing the datetime information.
         target_column (str): The name of the column containing the target variable.
-        context_length (int, optional): The length of the input context. Defaults to 120.
+        context_length (int, optional): The length of the input sequence. Defaults to 120.
         frequency (Literal["15min", "1h", "4h", "D"], optional): The frequency of the data. Defaults to "1h".
-        train_test_split_year (int, optional): The year to split the dataset into train and test sets. Defaults to 2021.
+        train_test_split_year (int, optional): The year used for train-test split. Defaults to 2021.
+        train_val_split_year (int, optional): The year used for train-validation split. Defaults to 2020.
+
 
     Methods:
         get_dataframe(preprocessed: bool = False) -> pd.DataFrame:
@@ -57,7 +59,7 @@ class EliaSolarDataset(Dataset):
         )
 
         self.data = self.data.drop(columns=["DateTime"])
-        self.data = torch.from_numpy(self.data.values.astype("float16"))
+        self.data = torch.from_numpy(self.data.values.astype("float32"))
         self.data = self.data.unfold(0, context_length, 1)
         self.labels = self.data[:, -1, 0]
 
@@ -77,7 +79,7 @@ class EliaSolarDataset(Dataset):
         return df
 
     def __preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
-        df[self.datetime_column] = pd.to_datetime(df[self.datetime_column], format="%d/%m/%Y %H:%M")
+        df[self.datetime_column] = pd.to_datetime(df[self.datetime_column], format="%Y-%m-%d %H:%M:%S")
         df = df.groupby(pd.Grouper(key=self.datetime_column, freq=self.frequency)).sum().reset_index()
         df = df[[self.datetime_column, self.target_column]]
         scaler = MinMaxScaler()
@@ -88,5 +90,5 @@ class EliaSolarDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        sample = {"data": self.data[idx], "label": self.labels[idx]}
+        sample = (self.data[idx], self.labels[idx])
         return sample
