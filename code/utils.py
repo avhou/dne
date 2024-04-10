@@ -20,6 +20,9 @@ class ModelSettings:
         self.forward_expansion = int(config.get(section_name, "ForwardExpansion"))
         self.dropout = float(config.get(section_name, "Dropout"))
         self.forecast_size = int(config.get(section_name, "ForecastSize"))
+        self.encoder_type = str(config.get(section_name, "EncoderType"))
+        self.kernel_size = int(config.get(section_name, "KernelSize"))
+        self.padding_right = int(config.get(section_name, "PaddingRight"))
 
 
 class DataSettings:
