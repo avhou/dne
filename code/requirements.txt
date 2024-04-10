@@ -4,7 +4,6 @@ jupyter
 ipykernel
 xlrd
 scikit-learn
-scikit-lego
 tqdm
 matplotlib
 seaborn
