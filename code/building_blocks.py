@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 from dataclasses import dataclass
 from typing import *
@@ -97,10 +98,10 @@ class TransformerBlock(nn.Module):
         x = self.dropout(self.norm1(attention + query))
         forward = self.feed_forward(x)
         out = self.dropout(self.norm2(forward + x))
-        return out, attention
+        return [out, out, out], attention
 
-
-### Standard Positional encoding
+### Encodings
+#### Standard Positional encoding
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.2, max_len=5000):
         super(PositionalEncoding, self).__init__()
@@ -119,7 +120,7 @@ class PositionalEncoding(nn.Module):
         x = x + self.pe[: x.size(0), :]
         return self.dropout(x)
 
-
+#### Temporal encoding
 class TemporalEncoding(nn.Module):
     def __init__(self, d_model, frequency: Literal["15min", "1h", "d"] = "1h"):
         super(TemporalEncoding, self).__init__()
@@ -144,61 +145,137 @@ class TemporalEncoding(nn.Module):
 
         return hour_x + weekday_x + day_x + month_x
 
+#### Causal Conv1d encoding
+class CausalConv1d(torch.nn.Conv1d):
+    def __init__(self,
+                 in_channels,
+                 out_channels,
+                 kernel_size,
+                 stride=1,
+                 dilation=1,
+                 groups=1,
+                 bias=True):
+
+        super(CausalConv1d, self).__init__(
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=0,
+            dilation=dilation,
+            groups=groups,
+            bias=bias)
+        
+        self.__padding = (kernel_size - 1) * dilation
+        
+    def forward(self, x):
+        # Apply causal padding
+        x = super(CausalConv1d, self).forward(F.pad(x, (self.__padding,0)))
+        x = F.tanh(x)
+        return x
+
+#### Asymmetric Padding Conv1d encoding
+class AsymmetricConv1d(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, padding_right, bias=True):
+        super(AsymmetricConv1d, self).__init__()
+        self.conv = nn.Conv1d(in_channels, out_channels, kernel_size, bias=bias)
+        self.padding_right = padding_right
+
+    def forward(self, x):
+        # Apply asymmetric padding
+        x = F.pad(x, (0,self.padding_right))
+        x = F.tanh(x)
+        return self.conv(x)
 
 ### Encoder
+#### Base
 class TimeSeriesEncoder(nn.Module):
-    def __init__(
-        self,
-        input_dim,
-        embed_size,
-        num_layers,
-        heads,
-        device,
-        forward_expansion,
-        dropout,
-    ):
-
+    def __init__(self, input_dim, embed_size, num_layers, heads, device, forward_expansion, dropout, kernel_size, padding_right):
         super(TimeSeriesEncoder, self).__init__()
-
         self.input_dim = input_dim
         self.embed_size = embed_size
         self.device = device
-
-        self.feature_embedding = nn.Linear(input_dim, embed_size)
-        self.pos_embedding = PositionalEncoding(embed_size)
-        self.temporal_embedding = TemporalEncoding(embed_size, frequency="1h")
-
         self.dropout = nn.Dropout(dropout)
 
-        self.layers = nn.ModuleList(
-            [
-                TransformerBlock(
-                    embed_size,
-                    heads,
-                    dropout=dropout,
-                    forward_expansion=forward_expansion,
-                )
-                for _ in range(num_layers)
-            ]
-        )
+        self.kernel_size = kernel_size
+        self.padding_right = padding_right
 
+        self.temporal_embedding = TemporalEncoding(embed_size, frequency="1h")
+        self.pos_embedding = torch.nn.Embedding(embed_size,512)
+        
+        self.layers = nn.ModuleList([
+            TransformerBlock(embed_size, heads, dropout=dropout, forward_expansion=forward_expansion)
+            for _ in range(num_layers)
+        ])
+    
+    def encoding(self, x):
+        # Abstract method
+        raise NotImplementedError("Encoding not implemented")
+    
     def forward(self, x, mask):
-        # print(f"input shape:{x.shape}")
-        feature_embed = self.dropout(self.feature_embedding(x.squeeze()))
-        feature_embed = feature_embed.unsqueeze(1).expand(-1, self.input_dim, -1)
-        # print(f"feature_embed shape:{feature_embed.shape}")
-        pos_embed = self.dropout(self.pos_embedding(x))
-        # print(f"pos_embed shape:{pos_embed.shape}")
+        input_embedding = self.encoding(x)
         temporal_embed = self.temporal_embedding(x)
-
-        input_embedding = feature_embed + pos_embed + temporal_embed
-        attention_layers = []
-
+        
+        input_embedding = [embed + temporal_embed for embed in input_embedding]
+        
+        attention_weights = []
         for layer in self.layers:
-            input_embedding, attention = layer(input_embedding, input_embedding, input_embedding, mask)
-            attention_layers.append(attention)
+            input_embedding, weights = layer(*input_embedding, mask)
+            attention_weights.append(weights)
+        
+        return input_embedding[0], attention_weights
 
-        return input_embedding, attention_layers
+#### Positional Encodig
+class PositionalEncodingEncoder(TimeSeriesEncoder):
+    def __init__(self, *args, **kwargs):
+        super(PositionalEncodingEncoder, self).__init__(*args, **kwargs)
+        self.feature_embedding = nn.Linear(self.input_dim, self.embed_size)
+        self.pos_embedding = PositionalEncoding(self.embed_size)
+    
+    def encoding(self, x):
+        feature_embed = self.feature_embedding(x.squeeze())
+        feature_embed = feature_embed.unsqueeze(1).expand(-1, self.input_dim, -1)
+        #print(f"feature_embed shape:{feature_embed.shape}")
+        pos_embed = self.pos_embedding(x)
+        #print(f"pos_embed shape:{pos_embed.shape}")
+        
+        input_embedding =  self.dropout(feature_embed + pos_embed)
+        return [input_embedding, input_embedding, input_embedding]
+
+#### Causal Conv Encodig
+class CausalConv1dEncoder(TimeSeriesEncoder):
+    def __init__(self, *args, **kwargs):
+        super(CausalConv1dEncoder, self).__init__(*args, **kwargs)
+        self.qk_feature_embedding = CausalConv1d(self.input_dim, self.embed_size, self.kernel_size)
+        self.v_feature_embedding = CausalConv1d(self.input_dim, self.embed_size, 1)
+                
+    def encoding(self, x):
+        query_key_embed = self.qk_feature_embedding(x.permute(0, 2, 1)).permute(2, 0, 1)
+        value_embed = self.v_feature_embedding(x.permute(0, 2, 1)).permute(2, 0, 1)
+        
+        pos_embed = self.pos_embedding(x.type(torch.long).squeeze()).permute(1,0,2)
+        
+        query_key_embed = query_key_embed + pos_embed
+        value_embed = value_embed + pos_embed
+        return [value_embed.permute(1,0,2), query_key_embed.permute(1,0,2), query_key_embed.permute(1,0,2)]
+    
+#### Asym Padding Conv Encodig
+class AsymPaddingConv1dEncoder(TimeSeriesEncoder):
+    #Tested with kernel_size=3, padding_right=2
+    def __init__(self, *args, **kwargs):
+        super(AsymPaddingConv1dEncoder, self).__init__(*args, **kwargs)
+        self.qk_feature_embedding = AsymmetricConv1d(self.input_dim, self.embed_size, self.kernel_size, self.padding_right)
+        self.v_feature_embedding = AsymmetricConv1d(self.input_dim, self.embed_size, 1, 0)
+        
+    def encoding(self, x):
+        query_key_embed = self.qk_feature_embedding(x.permute(0, 2, 1)).permute(2, 0, 1)
+        value_embed = self.v_feature_embedding(x.permute(0, 2, 1)).permute(2, 0, 1)
+        
+        pos_embed = self.pos_embedding(x.type(torch.long).squeeze()).permute(1,0,2)
+        
+        query_key_embed = query_key_embed + pos_embed
+        value_embed = value_embed + pos_embed
+        return [value_embed.permute(1,0,2), query_key_embed.permute(1,0,2), query_key_embed.permute(1,0,2)]
 
 
 ### Decoder
@@ -226,14 +303,28 @@ class TimeSeriesTransformerParams:
     forward_expansion: int
     dropout: float
     forecast_size: int
+    encoder_type: str
+    kernel_size: int
+    padding_right : int
 
 
 ### Transformer
 class TimeSeriesTransformer(nn.Module):
-    def __init__(self, input_dim, embed_size, num_layers, heads, device, forward_expansion, dropout, forecast_size=1):
+    def __init__(self, input_dim, embed_size, num_layers, heads, device, forward_expansion, dropout, forecast_size=1, encoder_type="PositionalEncodingEncoder", kernel_size=9, padding_right=2):
         super(TimeSeriesTransformer, self).__init__()
-
-        self.encoder = TimeSeriesEncoder(input_dim, embed_size, num_layers, heads, device, forward_expansion, dropout)
+        
+        encoder_mapping = {
+            "PositionalEncodingEncoder": PositionalEncodingEncoder,
+            "CausalConv1dEncoder": CausalConv1dEncoder,
+            "AsymPaddingConv1dEncoder": AsymPaddingConv1dEncoder
+        }
+        
+        Encoder = encoder_mapping.get(encoder_type, None)
+        
+        if Encoder is None:
+            raise ValueError(f"Unknown encoder type: {encoder_type}")
+        
+        self.encoder = Encoder(input_dim, embed_size, num_layers, heads, device, forward_expansion, dropout, kernel_size, padding_right)
 
         self.decoder = TimeSeriesLinearDecoder(embed_size, forecast_size)
 
@@ -258,6 +349,9 @@ class TimeSeriesTransformer(nn.Module):
             forward_expansion=params.forward_expansion,
             dropout=params.dropout,
             forecast_size=params.forecast_size,
+            encoder_type=params.encoder_type,
+            kernel_size=params.kernel_size,
+            padding_right=params.padding_right
         )
 
 
