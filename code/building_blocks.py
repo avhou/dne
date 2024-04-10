@@ -418,10 +418,15 @@ class Scenario:
         avg_val_loss = np.mean(val_loss_batch)
         return avg_val_loss
 
+    def save_model_state(self, model, suffix: str):
+        weights_dir = os.path.join(self.params.base_path, "weights")
+        path = os.path.join(weights_dir, f"{self.params.name}_model_{suffix}.pth")
+        torch.save(model.state_dict(), path)
+        print(f"Model {self.params.name} saved to file {path} with suffix {suffix}")
+
     def execute(self, model) -> ScenarioResult:
         min_train_loss = float("inf")
         min_val_loss = float("inf")
-        best_model_state = None
         early_stop_count = 0
         train_losses = []
         val_losses = []
@@ -445,20 +450,22 @@ class Scenario:
 
             if avg_train_loss < min_train_loss:
                 min_train_loss = avg_train_loss
-                best_model_state = {"state_dict": model.state_dict(), "epoch": epoch, "type": "train"}
                 print(f"New best training score at epoch {epoch+1}")
+                self.save_model_state(model, f"best_train")
 
             avg_val_loss = self.validate(model, self.params.dataloader_validation, self.params.device, criterion)
             val_losses.append(avg_val_loss)
 
             if avg_val_loss < min_val_loss:
                 min_val_loss = avg_val_loss
-                best_model_state = {"state_dict": model.state_dict(), "epoch": epoch, "type": "val"}
                 print(f"New best validation score at epoch {epoch+1}")
+                self.save_model_state(model, f"best_validation")
 
             scheduler.step(avg_val_loss)
 
-            if avg_val_loss >= min_val_loss:
+            self.save_model_state(model, f"last_epoch")
+
+            if avg_val_loss > min_val_loss:
                 print(f"increasing early stop count")
                 early_stop_count += 1
                 if early_stop_count >= self.params.early_stop_count:
@@ -470,12 +477,6 @@ class Scenario:
             print(
                 f"Epoch {epoch + 1}/{self.params.epochs}, Training Loss: {train_losses[-1]:.4f}, Validation Loss: {val_losses[-1]:.4f}"
             )
-
-        if best_model_state:
-            model_type = "train" if best_model_state["type"] == "train" else "val"
-            path = os.path.join(weights_dir, f"{self.params.name}_model_best_{model_type}.pth")
-            torch.save(best_model_state["state_dict"], path)
-            print(f"Best {model_type} model saved to file {path} from epoch {best_model_state['epoch']+1}")
 
         print(f"testing the model")
         model.eval()
