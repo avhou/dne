@@ -2,7 +2,6 @@ from typing import Literal
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-from sklego.preprocessing import RepeatingBasisFunction
 from sklearn.preprocessing import MinMaxScaler
 
 
@@ -47,7 +46,7 @@ class EliaSolarDataset(Dataset):
         )
 
         self.train_val_split_index = (
-            max(
+            min(
                 list(
                     self.data[
                         (self.data[self.datetime_column].dt.year >= train_val_split_year)
