@@ -398,6 +398,9 @@ class Scenario:
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
+            else:
+                loss.backward()
+                optimizer.step()
 
             train_loss_batch.append(loss.item())
 
