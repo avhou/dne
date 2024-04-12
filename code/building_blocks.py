@@ -10,6 +10,7 @@ from typing import *
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import os
+import datetime
 
 
 # %%
@@ -217,7 +218,7 @@ class TimeSeriesEncoder(nn.Module):
         temporal_embed = self.temporal_embedding(x)
         
         input_embedding = [embed + temporal_embed for embed in input_embedding]
-        
+
         attention_weights = []
         for layer in self.layers:
             input_embedding, weights = layer(*input_embedding, mask)
@@ -468,6 +469,7 @@ class Scenario:
 
             self.save_model_state(model, f"last_epoch")
 
+            print(f"{datetime.datetime.now()}: epoch {epoch + 1}/{self.params.epochs}, Training Loss: {train_losses[-1]:.4f}, Validation Loss: {val_losses[-1]:.4f}")
             if avg_val_loss > min_val_loss:
                 print(f"increasing early stop count")
                 early_stop_count += 1
@@ -477,9 +479,6 @@ class Scenario:
             else:
                 early_stop_count = 0
 
-            print(
-                f"Epoch {epoch + 1}/{self.params.epochs}, Training Loss: {train_losses[-1]:.4f}, Validation Loss: {val_losses[-1]:.4f}"
-            )
 
         print(f"testing the model")
         model.eval()
