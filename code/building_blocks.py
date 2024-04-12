@@ -11,6 +11,9 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import os
 import datetime
+from datasets import EliaSolarDataset
+from utils import ConfigSettings
+from torch.utils.data.sampler import SubsetRandomSampler
 
 
 # %%
@@ -469,7 +472,7 @@ class Scenario:
 
             self.save_model_state(model, f"last_epoch")
 
-            print(f"{datetime.datetime.now()}: epoch {epoch + 1}/{self.params.epochs}, Training Loss: {train_losses[-1]:.4f}, Validation Loss: {val_losses[-1]:.4f}")
+            print(f"{datetime.datetime.now()}: scenario {self.params.name} epoch {epoch + 1}/{self.params.epochs}, Training Loss: {train_losses[-1]:.4f}, Validation Loss: {val_losses[-1]:.4f}")
             if avg_val_loss > min_val_loss:
                 print(f"increasing early stop count")
                 early_stop_count += 1
@@ -507,3 +510,69 @@ def to_sequences(seq_size, obs):
         x.append(window)
         y.append(after_window)
     return torch.tensor(x, dtype=torch.float32).view(-1, seq_size, 1), torch.tensor(y, dtype=torch.float32).view(-1, 1)
+
+def generate_scenarios(base_name: str,
+                       device: str,
+                       frequencies: List[Literal["15min", "1h", "4h", "D"]],
+                       layers: List[int],
+                       heads: List[int],
+                       forward_expansions: List[int]) -> List[Tuple[TimeSeriesTransformerParams, ScenarioParams]]:
+    cf = ConfigSettings(config_path='config.ini')
+    params = []
+    for frequency in frequencies:
+
+        # setup the dataset, once per frequency
+        solar_dataset = EliaSolarDataset(
+            csv_path=cf.data.file_path,
+            datetime_column='DateTime',
+            target_column="Corrected Upscaled Measurement [MW]",
+            context_length=cf.model.context_length,
+            frequency=frequency,
+            train_test_split_year=cf.data.train_test_split_year,
+            train_val_split_year=cf.data.train_val_split_year,)
+
+        # setup the dataloaders, once per frequency
+        indices = list(range(len(solar_dataset)))
+        train_indices = indices[:solar_dataset.train_val_split_index]
+        val_indices = indices[solar_dataset.train_val_split_index:solar_dataset.train_test_split_index]
+        test_indices = indices[solar_dataset.train_test_split_index:]
+
+        # Creating data samplers and loaders:
+        train_sampler = SubsetRandomSampler(train_indices)
+        valid_sampler = SubsetRandomSampler(val_indices)
+        test_sampler = SubsetRandomSampler(test_indices)
+
+        train_loader = torch.utils.data.DataLoader(solar_dataset, batch_size=cf.model.batch_size,
+                                                   sampler=train_sampler)
+        validation_loader = torch.utils.data.DataLoader(solar_dataset, batch_size=cf.model.batch_size,
+                                                        sampler=valid_sampler)
+        test_loader = torch.utils.data.DataLoader(solar_dataset, batch_size=cf.model.batch_size,sampler=test_sampler)
+
+        for num_layer in layers:
+            for num_head in heads:
+                for forward_expansion in forward_expansions:
+                    model_params = TimeSeriesTransformerParams(
+                        input_dim=cf.model.context_length,
+                        embed_size=cf.model.embedding_size,
+                        num_layers=num_layer,
+                        heads=num_head,
+                        device=device,
+                        forward_expansion=forward_expansion,
+                        dropout=cf.model.dropout,
+                        forecast_size=cf.model.forecast_size,
+                        encoder_type=cf.model.encoder_type,
+                        kernel_size=cf.model.kernel_size,
+                        padding_right=cf.model.padding_right
+                    )
+                    scenario_params = ScenarioParams(
+                        name=f"elia-{base_name}-freq{frequency}-layers{num_layer}-heads{num_head}-fe{forward_expansion}",
+                        device=device,
+                        epochs=100,
+                        dataloader_train=train_loader,
+                        dataloader_validation=validation_loader,
+                        dataloader_test=test_loader,
+                        base_path="/dne" if cf.runtime.run_in_colab else "./"
+                    )
+                    params.append((model_params, scenario_params))
+    return params
+
