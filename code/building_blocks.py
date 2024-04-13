@@ -511,8 +511,59 @@ def to_sequences(seq_size, obs):
         y.append(after_window)
     return torch.tensor(x, dtype=torch.float32).view(-1, seq_size, 1), torch.tensor(y, dtype=torch.float32).view(-1, 1)
 
+def filename_part(encoder_type: str, frequency: str, layer: int, head: int, forward_expansion: int) -> str:
+    return f"enc{encoder_type}-freq{frequency}-layers{layer}-heads{head}-fe{forward_expansion}"
+
+
+def generate_dataset(cf: ConfigSettings, frequency: Literal["15min", "1h", "4h", "D"]) -> EliaSolarDataset:
+    return EliaSolarDataset(
+        csv_path=cf.data.file_path,
+        datetime_column='DateTime',
+        target_column="Corrected Upscaled Measurement [MW]",
+        context_length=cf.model.context_length,
+        frequency=frequency,
+        train_test_split_year=cf.data.train_test_split_year,
+        train_val_split_year=cf.data.train_val_split_year)
+
+def generate_model_params(cf: ConfigSettings, device: str, encoder_type: str, num_layer: int, num_head: int, forward_expansion: int) -> TimeSeriesTransformerParams:
+    return TimeSeriesTransformerParams(
+        input_dim=cf.model.context_length,
+        embed_size=cf.model.embedding_size,
+        num_layers=num_layer,
+        heads=num_head,
+        device=device,
+        forward_expansion=forward_expansion,
+        dropout=cf.model.dropout,
+        forecast_size=cf.model.forecast_size,
+        encoder_type=encoder_type,
+        kernel_size=cf.model.kernel_size,
+        padding_right=cf.model.padding_right
+    )
+
+def generate_loaders(cf: ConfigSettings, frequency: Literal["15min", "1h", "4h", "D"]) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
+    # setup the dataset, once per frequency
+    solar_dataset = generate_dataset(cf, frequency)
+
+    # setup the dataloaders, once per frequency
+    indices = list(range(len(solar_dataset)))
+    train_indices = indices[:solar_dataset.train_val_split_index]
+    val_indices = indices[solar_dataset.train_val_split_index:solar_dataset.train_test_split_index]
+    test_indices = indices[solar_dataset.train_test_split_index:]
+
+    # Creating data samplers and loaders:
+    train_sampler = SubsetRandomSampler(train_indices)
+    valid_sampler = SubsetRandomSampler(val_indices)
+    test_sampler = SubsetRandomSampler(test_indices)
+
+    train_loader = torch.utils.data.DataLoader(solar_dataset, batch_size=cf.model.batch_size, sampler=train_sampler)
+    validation_loader = torch.utils.data.DataLoader(solar_dataset, batch_size=cf.model.batch_size, sampler=valid_sampler)
+    test_loader = torch.utils.data.DataLoader(solar_dataset, batch_size=cf.model.batch_size,sampler=test_sampler)
+    return (train_loader, validation_loader, test_loader)
+
+
 def generate_scenarios(base_name: str,
                        device: str,
+                       encoder_type: str,
                        frequencies: List[Literal["15min", "1h", "4h", "D"]],
                        layers: List[int],
                        heads: List[int],
@@ -520,50 +571,12 @@ def generate_scenarios(base_name: str,
     cf = ConfigSettings(config_path='config.ini')
     params = []
     for frequency in frequencies:
-
-        # setup the dataset, once per frequency
-        solar_dataset = EliaSolarDataset(
-            csv_path=cf.data.file_path,
-            datetime_column='DateTime',
-            target_column="Corrected Upscaled Measurement [MW]",
-            context_length=cf.model.context_length,
-            frequency=frequency,
-            train_test_split_year=cf.data.train_test_split_year,
-            train_val_split_year=cf.data.train_val_split_year,)
-
-        # setup the dataloaders, once per frequency
-        indices = list(range(len(solar_dataset)))
-        train_indices = indices[:solar_dataset.train_val_split_index]
-        val_indices = indices[solar_dataset.train_val_split_index:solar_dataset.train_test_split_index]
-        test_indices = indices[solar_dataset.train_test_split_index:]
-
-        # Creating data samplers and loaders:
-        train_sampler = SubsetRandomSampler(train_indices)
-        valid_sampler = SubsetRandomSampler(val_indices)
-        test_sampler = SubsetRandomSampler(test_indices)
-
-        train_loader = torch.utils.data.DataLoader(solar_dataset, batch_size=cf.model.batch_size,
-                                                   sampler=train_sampler)
-        validation_loader = torch.utils.data.DataLoader(solar_dataset, batch_size=cf.model.batch_size,
-                                                        sampler=valid_sampler)
-        test_loader = torch.utils.data.DataLoader(solar_dataset, batch_size=cf.model.batch_size,sampler=test_sampler)
+        (train_loader, validation_loader, test_loader) = generate_loaders(cf, frequency)
 
         for num_layer in layers:
             for num_head in heads:
                 for forward_expansion in forward_expansions:
-                    model_params = TimeSeriesTransformerParams(
-                        input_dim=cf.model.context_length,
-                        embed_size=cf.model.embedding_size,
-                        num_layers=num_layer,
-                        heads=num_head,
-                        device=device,
-                        forward_expansion=forward_expansion,
-                        dropout=cf.model.dropout,
-                        forecast_size=cf.model.forecast_size,
-                        encoder_type=cf.model.encoder_type,
-                        kernel_size=cf.model.kernel_size,
-                        padding_right=cf.model.padding_right
-                    )
+                    model_params = generate_model_params(cf, device, encoder_type, num_layer, num_head, forward_expansion)
                     scenario_params = ScenarioParams(
                         name=f"elia-{base_name}-freq{frequency}-layers{num_layer}-heads{num_head}-fe{forward_expansion}",
                         device=device,
