@@ -28,7 +28,7 @@ The original transformer architecture introduces a quadratic time and space comp
 
 In this paper, we focus on using transformers for time series forecasting. We aim to compare different attention mechanism and determine which mechanism best captures the outcome of past events.  We formulate a first research question : 
 
-> **RQ 1 : When comparing regular self-attention, convoluted self-attention, asymmetric convoluted self-attention and eigenvector based self-attention, which mechanism best predicts future values using mean square error (MSE) as metric?**
+> **RQ 1 : When comparing regular self-attention, convoluted self-attention, right-padded convoluted self-attention and fourier transform based self-attention, which mechanism best predicts future values using mean square error (MSE) as metric?**
 
 The Elia dataset used is fully described in [the dataset description section](#sec:dataset).  It not only contains time series data, but also day+1 and day+7 predictions of the same data.  We formulate a second research question : 
 
@@ -90,8 +90,7 @@ We started by examining the dataset provided [@dataset]. Outlier analysis yielde
 
 Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate influence on prediction MSE.  Models were tuned using appropriate hyperparameters using TODO TODO TODO cross-validation.   Several datasets were generated, properly aggregating data and using both seasonal and monthly historical scenario's.  Each model was then used to to predictions on these data sets.   MSE was used as the loss metric.  
 
-Data was split in a training part (TODO %), a validation part (TODO %), and a test part (TODO %).  
-TODO beschrijven hoe split training / validation / test set.  gaan we aaneensluitende blokken gebruiken of random rijen tot de percenten opgevuld zijn?
+Data was split in a training part (63 %), a validation part (10 %), and a test part (27 %).  For this, all data was sorted chronologically.  All data up to but not including 2020 served as training data, the data of 2020 up to but not including 2021 served as validation data, and data of 2021 and later served as test data.
 
 ## Design elaboration
 
@@ -99,8 +98,8 @@ We decided to evaluate the following attention mechanisms (Table \ref{table:atte
 
 - regular self-attention (AM-1).  This is the mechanism described in the original transformer paper [@transformer].
 - convoluted self-attention as described in [@paper] (AM-2).  This is the mechanism described in [@paper].  It generalizes the regular self-attention mechanism and uses a 1D convolution to transform the Query (Q) and Key (K) values before using them in the transformer architecture.
-- asymmetric convoluted self-attention (AM-3).  This is a variation of the mechanism described in [@paper].  Whereas [@paper] uses a symmetric convolution, here we use a (right-)asymmetric convolution to transfer Q and K values before using them in the transformer architecture.
-- eigenvector based self-attention (AM-4).  This uses eigenvectors as a measure of similarity between keys and values to determine where to direct attention.
+- right padded convoluted self-attention (AM-3).  This is a variation of the mechanism described in [@paper].  Whereas [@paper] uses a symmetric convolution, here we use a convolution that focuses on the right hand side to transform Q and K values before using them in the transformer architecture.  Padding to the right is done to prevent looking at future values.
+- fourier transform based self-attention (AM-4).  This uses the fourier transform to decompose the input embedding in a vector of frequence values.  These vectors are used as a measure of similarity between keys and values to determine where to direct attention.
 
 
 | attention mechanism                  | abbreviation |
@@ -108,14 +107,13 @@ We decided to evaluate the following attention mechanisms (Table \ref{table:atte
 | regular self-attention               | AM-1         |
 | convoluted self-attention            | AM-2         |
 | asymmetric convoluted self-attention | AM-3         |
-| eigenvector self-attention           | AM-4         |
+| fourier transform self-attention     | AM-4         |
 
 Table:  Attention mechanisms \label{table:attention-mechanisms}
 
 
-Feature embedding was done using a combination of both positional encoding and a more specific temporal encoding, taking into account month and year of the data.  The temporal encoding is added as a one-hot encoding to the input vector and serves as an additional clue for the transformer model to link similar events.
+Feature embedding was done using a combination of both positional encoding and a more specific temporal encoding, taking into account hour of the day, day of the week, day of the month and month of the year of the data.  The temporal encoding is added to the input vector and serves as an additional clue for the transformer model to link similar events.
 
-TODO waarom enkel maand / jaar, en niet dag?
 TODO extra features / embedding
 
 -> feature + positional encoding + one-hot encoding van dag of maand of week "temporal encoding"
@@ -157,7 +155,14 @@ Table: learning scenarios \label{table:scenarios}
 
 ## Implementation
 
-All code and data is available in a github repository [@github].  All deep learning models were implemented using the pytorch python package.  
+All code and data is available in a github repository [@github].  All deep learning models were implemented using the pytorch python package.  We recap the most important files here : 
+
+- `building_blocks.py` contains all pytorch modules and models, and other support code to execute different scenarios.
+- `datasets.py` contains the code to load and aggregate the Elia data into one pytorch dataloader.
+- `figures.ipynb` is a jupyter notebook that contains code to generate figures.
+- `stats.ipynb` is a jupyter notebook that contains code to check statistical validity.
+- `scenario-base-transformer.ipynb` is a jupyter notebook focusing on the execution of scenario using a vanilla transformer
+- TODO andere notebooks
 
 # Evaluation and Results
 
