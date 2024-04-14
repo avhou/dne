@@ -2,12 +2,15 @@ from configparser import ConfigParser
 
 
 class ConfigSettings:
-    def __init__(self, config_path: str = "config.ini") -> None:
+    def __init__(self, config_path: str = "config.ini", secrets_path: str = None) -> None:
         config = ConfigParser()
         config.read(config_path)
         self.model = ModelSettings(config, "Model")
         self.data = DataSettings(config, "Data")
         self.runtime = RuntimeSettings(config, "Runtime")
+        self.azure = AzureSettings(config, "Azure")
+        if secrets_path:
+            self.secrets = Secrets(secrets_path)
 
 
 class ModelSettings:
@@ -37,4 +40,25 @@ class DataSettings:
 class RuntimeSettings:
     def __init__(self, config: ConfigParser, section_name: str) -> None:
         self.run_in_colab = config.getboolean(section_name, "RunInColab")
+        self.run_in_azure = config.getboolean(section_name, "RunInAzure")
         self.run_on_gpu = config.getboolean(section_name, "RunOnGPU")
+
+
+class AzureSettings:
+    def __init__(self, config: ConfigParser, section_name: str) -> None:
+        self.environment_path = config.get(section_name, "EnvironmentPath")
+        self.training_script_path = config.get(section_name, "TrainingScriptPath")
+
+
+class AzureSecrets:
+    def __init__(self, config: ConfigParser, section_name: str) -> None:
+        self.subscription_id = config.get(section_name, "SubscriptionId")
+        self.resource_group_name = config.get(section_name, "ResourceGroupName")
+        self.workspace_name = config.get(section_name, "WorkspaceName")
+
+
+class Secrets:
+    def __init__(self, secrets_path: str = "secrets.ini") -> None:
+        secrets = ConfigParser()
+        secrets.read(secrets_path)
+        self.azure = AzureSecrets(secrets, "Azure")
