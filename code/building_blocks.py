@@ -386,7 +386,7 @@ class TimeSeriesTransformer(nn.Module):
         self.decoder = TimeSeriesLinearDecoder(embed_size, forecast_size)
 
     def make_mask(self, x):
-        seq_length = x.shape[1]
+        seq_length = x.shape[2]
         return torch.triu(torch.ones(seq_length, seq_length) * float("-inf"), diagonal=1).to(x.device)
 
     def forward(self, x):
