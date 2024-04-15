@@ -15,6 +15,7 @@ from datasets import EliaSolarDataset
 from utils import ConfigSettings
 from torch.utils.data.sampler import SubsetRandomSampler
 from scipy.fft import rfft
+import matplotlib.pyplot as plt
 
 
 # %%
@@ -263,21 +264,19 @@ class PositionalEncodingEncoder(TimeSeriesEncoder):
 
 class FourierEncoder(PositionalEncodingEncoder):
     def __init__(self, *args, **kwargs):
-        super(PositionalEncodingEncoder, self).__init__(*args, **kwargs)
+        super(FourierEncoder, self).__init__(*args, **kwargs)
 
     def encoding(self, x: torch.Tensor):
-        print(f"fourier encoding shape:{x.shape}")
-        x = x.permute(0, 2, 1)  # Permute dimensions to (batch_size, sequence_length, input_dim)
-        print(f"fourier encoding shape:{x.shape}")
-        x = x.flatten(start_dim=1)  # Flatten the tensor along the sequence_length dimension
-        print(f"fourier encoding shape:{x.shape}")
-        x = rfft(x.numpy())  # Apply the fast Fourier transform
-        x = torch.from_numpy(x)
-        print(f"fourier encoding shape:{x.shape}")
-        x = x.unsqueeze(1)  # Add a singleton dimension for compatibility with other encodings
-        print(f"fourier encoding shape:{x.shape}")
-
-        return super(PositionalEncodingEncoder, self).encoding(x)
+        freq = x.permute(0, 2, 1)  # Permute dimensions to (batch_size, sequence_length, input_dim)
+        freq = freq.flatten(start_dim=1)  # Flatten the tensor along the sequence_length dimension
+        freq = rfft(freq.numpy())  # Apply the fast Fourier transform
+        freq = torch.from_numpy(freq)
+        freq = freq.unsqueeze(1)  # Add a singleton dimension for compatibility with other encodings
+        freq = freq.real  # only the real part is of the Fourier transform is used
+        freq = F.pad(
+            freq, (0, x.size(-1) - freq.size(-1))
+        )  # pad with zeros on the last dimension to match the input size
+        return super(FourierEncoder, self).encoding(freq)
 
 
 #### Causal Conv Encodig
