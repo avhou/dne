@@ -37,18 +37,15 @@ cluster = AmlCompute(
 
 ml_client.begin_create_or_update(cluster).result()
 
-data_asset = ml_client.data.get("elia-solar-dataset-2012-2024", version="1")
-
 job = command(
     inputs=dict(
-        data=Input(path=data_asset.id, type=AssetTypes.MLTABLE, mode=InputOutputModes.RO_MOUNT),
         output_dir="./outputs",
         training_script=cf.azure.training_script_path,
     ),
     compute=cluster.name,
     environment=env_docker_context,
     code=".",  # location of source code
-    command="python ${{inputs.training_script}} --output_dir ${{inputs.output_dir}} --data ${{inputs.data}}",
+    command="python ${{inputs.training_script}} --output_dir ${{inputs.output_dir}}",
     experiment_name="pytorch-timerseries-transformer-control",
     display_name="Timerseries Transformer Control",
 )

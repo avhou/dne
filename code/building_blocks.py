@@ -129,7 +129,7 @@ class PositionalEncoding(nn.Module):
 
 #### Temporal encoding
 class TemporalEncoding(nn.Module):
-    def __init__(self, d_model, frequency: Literal["15min", "1h", "d"] = "1h"):
+    def __init__(self, d_model, frequency: Literal["15min", "1h", "d"] = "d"):
         super(TemporalEncoding, self).__init__()
 
         hour_size = 24
@@ -205,7 +205,6 @@ class TimeSeriesEncoder(nn.Module):
         dropout,
         kernel_size,
         padding_right,
-        frequency,
     ):
         super(TimeSeriesEncoder, self).__init__()
         self.input_dim = input_dim
@@ -216,7 +215,7 @@ class TimeSeriesEncoder(nn.Module):
         self.kernel_size = kernel_size
         self.padding_right = padding_right
 
-        self.temporal_embedding = TemporalEncoding(embed_size, frequency=frequency)
+        self.temporal_embedding = TemporalEncoding(embed_size)
         self.pos_embedding = torch.nn.Embedding(embed_size, 512)
 
         self.layers = nn.ModuleList(
@@ -266,9 +265,19 @@ class FourierEncoder(PositionalEncodingEncoder):
     def __init__(self, *args, **kwargs):
         super(PositionalEncodingEncoder, self).__init__(*args, **kwargs)
 
-    def encoding(self, x):
-        x = rfft(x.squeeze(), n=x.shape[1], axis=1)
-        super(PositionalEncodingEncoder, self).encoding(x)
+    def encoding(self, x: torch.Tensor):
+        print(f"fourier encoding shape:{x.shape}")
+        x = x.permute(0, 2, 1)  # Permute dimensions to (batch_size, sequence_length, input_dim)
+        print(f"fourier encoding shape:{x.shape}")
+        x = x.flatten(start_dim=1)  # Flatten the tensor along the sequence_length dimension
+        print(f"fourier encoding shape:{x.shape}")
+        x = rfft(x.numpy())  # Apply the fast Fourier transform
+        x = torch.from_numpy(x)
+        print(f"fourier encoding shape:{x.shape}")
+        x = x.unsqueeze(1)  # Add a singleton dimension for compatibility with other encodings
+        print(f"fourier encoding shape:{x.shape}")
+
+        return super(PositionalEncodingEncoder, self).encoding(x)
 
 
 #### Causal Conv Encodig
@@ -362,7 +371,7 @@ class TimeSeriesTransformer(nn.Module):
             "PositionalEncodingEncoder": PositionalEncodingEncoder,
             "CausalConv1dEncoder": CausalConv1dEncoder,
             "AsymPaddingConv1dEncoder": AsymPaddingConv1dEncoder,
-            "FourierEncoder": FourierEncoder
+            "FourierEncoder": FourierEncoder,
         }
 
         Encoder = encoder_mapping.get(encoder_type, None)
@@ -561,9 +570,7 @@ def filename_part(encoder_type: str, frequency: str, layer: int, head: int, forw
     return f"enc{encoder_type}-freq{frequency}-layers{layer}-heads{head}-fe{forward_expansion}"
 
 
-def generate_dataset(
-    cf: ConfigSettings, frequency: Literal["15min", "1h", "4h", "D"], azure_df: pd.DataFrame = None
-) -> EliaSolarDataset:
+def generate_dataset(cf: ConfigSettings, frequency: Literal["15min", "1h", "4h", "D"]) -> EliaSolarDataset:
     return EliaSolarDataset(
         csv_path=cf.data.file_path,
         datetime_column="DateTime",
@@ -572,8 +579,6 @@ def generate_dataset(
         frequency=frequency,
         train_test_split_year=cf.data.train_test_split_year,
         train_val_split_year=cf.data.train_val_split_year,
-        run_in_azure=cf.runtime.run_in_azure,
-        azure_df=azure_df,
     )
 
 
@@ -596,10 +601,10 @@ def generate_model_params(
 
 
 def generate_loaders(
-    cf: ConfigSettings, frequency: Literal["15min", "1h", "4h", "D"], azure_df: pd.DataFrame = None
+    cf: ConfigSettings, frequency: Literal["15min", "1h", "4h", "D"]
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
     # setup the dataset, once per frequency
-    solar_dataset = generate_dataset(cf, frequency, azure_df)
+    solar_dataset = generate_dataset(cf, frequency)
 
     # setup the dataloaders, once per frequency
     indices = list(range(len(solar_dataset)))
@@ -629,12 +634,11 @@ def generate_scenarios(
     heads: List[int],
     forward_expansions: List[int],
     base_path: str = "./",
-    azure_df: pd.DataFrame = None,
 ) -> List[Tuple[TimeSeriesTransformerParams, ScenarioParams]]:
     cf = ConfigSettings(config_path="config.ini")
     params = []
     for frequency in frequencies:
-        (train_loader, validation_loader, test_loader) = generate_loaders(cf, frequency, azure_df)
+        (train_loader, validation_loader, test_loader) = generate_loaders(cf, frequency)
 
         for num_layer in layers:
             for num_head in heads:

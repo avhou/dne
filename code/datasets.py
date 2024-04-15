@@ -33,13 +33,9 @@ class EliaSolarDataset(Dataset):
         frequency: Literal["15min", "1h", "4h", "D"] = "1h",
         train_test_split_year: int = 2021,
         train_val_split_year: int = 2020,
-        run_in_azure: bool = False,
-        azure_df: pd.DataFrame = None,
     ):
         self.csv_path = csv_path
-        self.azure_df = azure_df
-        self.run_in_azure = run_in_azure
-        self.data = azure_df if run_in_azure else pd.read_csv(csv_path)
+        self.data = pd.read_csv(csv_path)
         self.datetime_column = datetime_column
         self.target_column = target_column
         self.frequency = frequency
@@ -76,7 +72,7 @@ class EliaSolarDataset(Dataset):
         Returns:
             pd.DataFrame: The original or preprocessed dataframe.
         """
-        df = self.azure_df if self.run_in_azure else pd.read_csv(self.csv_path)
+        df = pd.read_csv(self.csv_path)
         if preprocessed:
             df = self.__preprocess(df)
         return df

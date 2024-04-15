@@ -40,7 +40,6 @@ class DataSettings:
 class RuntimeSettings:
     def __init__(self, config: ConfigParser, section_name: str) -> None:
         self.run_in_colab = config.getboolean(section_name, "RunInColab")
-        self.run_in_azure = config.getboolean(section_name, "RunInAzure")
         self.run_on_gpu = config.getboolean(section_name, "RunOnGPU")
 
 
