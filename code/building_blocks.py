@@ -333,7 +333,7 @@ class TimeSeriesLinearDecoder(nn.Module):
         self.decoder = nn.Linear(embed_size, forecast_size)
 
     def forward(self, x):
-        x = self.decoder(x[:, -1, :])
+        x = self.decoder(x[:, -1, :]).flatten()
         return x
 
 
