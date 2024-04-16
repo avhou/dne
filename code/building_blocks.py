@@ -138,7 +138,11 @@ class TemporalEncoding(nn.Module):
         day_size = 32
         month_size = 13
 
-        self.hour_embed = nn.Embedding(hour_size, d_model) if frequency in ["1h", "15min"] else 0
+        self.hour_embed = (
+            nn.Embedding(hour_size, d_model)
+            if frequency in ["1h", "15min"]
+            else nn.Embedding(hour_size, d_model).from_pretrained(torch.zeros(hour_size, d_model))
+        )
         self.weekday_embed = nn.Embedding(weekday_size, d_model)
         self.day_embed = nn.Embedding(day_size, d_model)
         self.month_embed = nn.Embedding(month_size, d_model)
