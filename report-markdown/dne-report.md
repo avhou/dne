@@ -61,22 +61,7 @@ There are obvious differences in solar power generation between summer months an
 
 The Elia data [@dataset] is very fine grained and contains $24*4=96$ measurements per day, resulting in $30*24*4=2880$ measurements for a 30 day month.  In order to be able to limit memory and computational resources, we have added the possibility to aggregate these dataset.  Possible choices are **(i)** no aggregation, **(ii)** hourly aggregation, **(iii)** aggregation every 4 hours (starting from 00:00, resulting in 6 values per day), and finally **(iv)** aggregation per day.  Aggregation is done by averaging the values in the selected timeframe.
 
-Elia provides a lot of historical data, going back more than 10 years in the past.  We selected 10 years of data (2014-2023), only selecting years containing data for all months.  Furthermore, we wanted to investigate scenarios making sense for the data used.  This means we did not want to mix data of summer months (very high solar power production) with data of winter months (very low solar power production).  We added a selection mechanim for **(i)** taking data of one particular month across all 10 years, and **(ii)** taking data of one particular season (winter, summer) of a single year.  When selecting a single month across all years, all values were concatenated into a single dataseries.  When selecting a season, e.g. summer, all values of the different months of the season were concatenated into a single dataseries.  
-
-Input length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic complexity in $L$.  Taking too few days into acount, it will be difficult to spot similar events in the past.  Taking too many days into account, it will be prohibitely expensive in terms of memory and computational resources to train and evaluate the model.  The dataset and dataloader implemented allowed for a selection of 5, 10 or 20 days.
-
-This is summarized in Table \ref{table:pre-processing-steps}.
-
-
-| step        | description                          | options                                        |
-|:------------|:-------------------------------------|:-----------------------------------------------|
-| aggregation | Reduce number of values by averaging | no aggregation, hourly, 4-hourly, daily        |
-| selection   | Selection of specific months         | same month across 10 years, season in one year |
-| padding     | Selection of input length in days    | 5, 10, 20 days                                 |
-
-Table:  Possible pre-processing steps \label{table:pre-processing-steps}
-
-TODO nachtelijke uren eruit halen?
+Elia provides a lot of historical data, going from February of 2013 to February of 2024.  All data were taken into account, in order to maximize the possibility of finding interesting patterns in the data.  Input length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic complexity in $L$.  Taking too few measurements into acount, it will be difficult to spot similar events in the past.  Taking too many measurements into account, it will be prohibitely expensive in terms of memory and computational resources to train and evaluate the model.  The dataset and dataloader implemented allowed for the selection of the number of input values.  This is related to the level of aggregations in terms of how many hours or days this represents, i.e. when using hourly aggregating and taking 24 input measurements, we are looking at that data of exactly one day.
 
 ### Outlier analysis {#sec:outlier}
 
@@ -86,18 +71,19 @@ A visual outlier analysis yielded no abnormal or obiously wrong values.  This ma
 
 ## Research methodology
 
-We started by examining the dataset provided [@dataset]. Outlier analysis yielded no results, and we performed a number of standard checks on the quality of the data and decided not to exclude any data from the dataset.  
+We started by examining the dataset [@dataset]. Outlier analysis yielded no results, and we performed a number of standard checks on the quality of the data and decided not to exclude any data from the dataset.  
 
-Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate influence on prediction MSE.  Models were tuned using appropriate hyperparameters using TODO TODO TODO cross-validation.   Several datasets were generated, properly aggregating data and using both seasonal and monthly historical scenario's.  Each model was then used to to predictions on these data sets.   MSE was used as the loss metric.  
+Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate influence on prediction MSE.  We first evaluated different models by varying some hyperparameters and by varying data aggregation (see Table \ref{table:hyperparameters}).  Given our limited computational resources, we chose a fixed set of hyperparameter and aggregation values for the rest of the experiments.  
 
-Data was split in a training part (63 %), a validation part (10 %), and a test part (27 %).  For this, all data was sorted chronologically.  All data up to but not including 2020 served as training data, the data of 2020 up to but not including 2021 served as validation data, and data of 2021 and later served as test data.
+Data was split in a training part (63 %), a validation part (10 %), and a test part (27 %).  For this, all data was sorted chronologically.  All data up to but not including 2020 served as training data, the data of 2020 up to but not including 2021 served as validation data, and data of 2021 and later served as test data.  Models were first trained on the training dataset and then validated on the validation dataset for a maximum of 100 epochs.  However, to limit computation, we kept track of the minimum average validation error across all epochs and forced an early stop if the average validation error of the current epoch exceeded this minimum 5 times as this would indicate the validation error was no longer decreasing.  Each model was then used tested on the testing set and all losses (training losses, validation losses and testing losses) were kept for later analyses.   In all cases, MSE was used as the loss metric.  
+
 
 ## Design elaboration
 
-We decided to evaluate the following attention mechanisms (Table \ref{table:attention-mechanisms}) : 
+We decided to implement and evaluate the following attention mechanisms (Table \ref{table:attention-mechanisms}) : 
 
 - regular self-attention (AM-1).  This is the mechanism described in the original transformer paper [@transformer].
-- convoluted self-attention as described in [@paper] (AM-2).  This is the mechanism described in [@paper].  It generalizes the regular self-attention mechanism and uses a 1D convolution to transform the Query (Q) and Key (K) values before using them in the transformer architecture.
+- convoluted self-attention as described in [@paper] (AM-2).  This mechanism generalizes the regular self-attention mechanism and uses a 1D convolution to transform the Query (Q) and Key (K) values before using them in the transformer architecture.
 - right padded convoluted self-attention (AM-3).  This is a variation of the mechanism described in [@paper].  Whereas [@paper] uses a symmetric convolution, here we use a convolution that focuses on the right hand side to transform Q and K values before using them in the transformer architecture.  Padding to the right is done to prevent looking at future values.
 - fourier transform based self-attention (AM-4).  This uses the fourier transform to decompose the input embedding in a vector of frequence values.  These vectors are used as a measure of similarity between keys and values to determine where to direct attention.
 
@@ -111,6 +97,14 @@ We decided to evaluate the following attention mechanisms (Table \ref{table:atte
 
 Table:  Attention mechanisms \label{table:attention-mechanisms}
 
+| attention mechanism | hyperparameters                                                                           |
+|:--------------------|:------------------------------------------------------------------------------------------|
+| AM-1                | layers [2, 4, 6], heads [4, 8], forward expansion [256, 512], aggregation [1day, 4 hours] |
+| AM-2                | layers [2], heads [4], forward expansion [256], aggregation [1day], kernel size [3, 6, 9] |
+| AM-3                | layers [2], heads [4], forward expansion [256], aggregation [1day], kernel size [3, 6, 9]                                                                                      |
+| AM-4                | TODO                                                                                      |
+
+Table:  Hyperparameters \label{table:hyperparameters}
 
 Feature embedding was done using a combination of both positional encoding and a more specific temporal encoding, taking into account hour of the day, day of the week, day of the month and month of the year of the data.  The temporal encoding is added to the input vector and serves as an additional clue for the transformer model to link similar events.
 
