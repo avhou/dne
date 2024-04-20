@@ -532,8 +532,8 @@ class Scenario:
                 f"{datetime.datetime.now()}: scenario {self.params.name} epoch {epoch + 1}/{self.params.epochs}, Training Loss: {train_losses[-1]:.4f}, Validation Loss: {val_losses[-1]:.4f}"
             )
             if avg_val_loss > min_val_loss:
-                print(f"increasing early stop count")
                 early_stop_count += 1
+                print(f"early stop count was increased to {early_stop_count}")
                 if early_stop_count >= self.params.early_stop_count:
                     print("Early stopping!")
                     break
