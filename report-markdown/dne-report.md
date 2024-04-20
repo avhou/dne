@@ -40,7 +40,7 @@ Firstly, this report will look at the characteristics of the dataset used and di
 
 ## Dataset description {#sec:dataset}
 
-We use data from Elia [@elia], which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast datasets.  These contain time series of actual measured power in megawatt (MW), and also  day+1 and day+7 predictions of solar power output in MW.  Data is available for a period of 12 years (February 2012 until now) in monthly datasets.  Measurements and predictions are recorded every quarter of an hour.  The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points in Table \ref{table:features}.
+We use data from Elia [@elia], which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast datasets.  These contain time series of actual measured power in megawatt (MW), and also  day+1 and day+7 predictions of solar power output in MW.  Data is available in monthly datasets for the period of February 2013 to February 2024.  Measurements and predictions are recorded every quarter of an hour.  The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points in Table \ref{table:features}.
 
 | feature          | description                           | range                            |
 |:-----------------|:--------------------------------------|:---------------------------------|
@@ -61,7 +61,7 @@ There are obvious differences in solar power generation between summer months an
 
 The Elia data [@dataset] is very fine grained and contains $24*4=96$ measurements per day, resulting in $30*24*4=2880$ measurements for a 30 day month.  In order to be able to limit memory and computational resources, we have added the possibility to aggregate these dataset.  Possible choices are **(i)** no aggregation, **(ii)** hourly aggregation, **(iii)** aggregation every 4 hours (starting from 00:00, resulting in 6 values per day), and finally **(iv)** aggregation per day.  Aggregation is done by averaging the values in the selected timeframe.
 
-Elia provides a lot of historical data, going from February of 2013 to February of 2024.  All data were taken into account, in order to maximize the possibility of finding interesting patterns in the data.  Input length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic complexity in $L$.  Taking too few measurements into acount, it will be difficult to spot similar events in the past.  Taking too many measurements into account, it will be prohibitely expensive in terms of memory and computational resources to train and evaluate the model.  The dataset and dataloader implemented allowed for the selection of the number of input values.  This is related to the level of aggregations in terms of how many hours or days this represents, i.e. when using hourly aggregating and taking 24 input measurements, we are looking at that data of exactly one day.
+Elia provides a lot of historical data, going from February of 2013 to February of 2024.  All data were taken into account, in order to maximize the possibility of finding interesting patterns in the data.  Input length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic complexity in $L$.  Taking too few measurements into acount, it will be difficult to spot similar events in the past.  Taking too many measurements into account, it will be prohibitely expensive in terms of memory and computational resources to train and evaluate the model.  The model implemented allowed for easy selection of input length $L$.  This is related to the level of aggregations in terms of how many hours or days this represents, i.e. when using hourly aggregating and taking 24 input measurements, we are looking at the data of exactly one day.
 
 ### Outlier analysis {#sec:outlier}
 
@@ -75,7 +75,7 @@ We started by examining the dataset [@dataset]. Outlier analysis yielded no resu
 
 Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate influence on prediction MSE.  We first evaluated different models by varying some hyperparameters and by varying data aggregation (see Table \ref{table:hyperparameters}).  Given our limited computational resources, we chose a fixed set of hyperparameter and aggregation values for the rest of the experiments.  
 
-Data was split in a training part (63 %), a validation part (10 %), and a test part (27 %).  For this, all data was sorted chronologically.  All data up to but not including 2020 served as training data, the data of 2020 up to but not including 2021 served as validation data, and data of 2021 and later served as test data.  Models were first trained on the training dataset and then validated on the validation dataset for a maximum of 100 epochs.  However, to limit computation, we kept track of the minimum average validation error across all epochs and forced an early stop if the average validation error of the current epoch exceeded this minimum 5 times as this would indicate the validation error was no longer decreasing.  Each model was then used tested on the testing set and all losses (training losses, validation losses and testing losses) were kept for later analyses.   In all cases, MSE was used as the loss metric.  
+Data was split in a training part (63 %), a validation part (10 %), and a test part (27 %).  To accomplish this split, all data was sorted chronologically.  All data up to but not including 2020 served as training data, the data of 2020 up to but not including 2021 served as validation data, and data of 2021 and later served as test data.  Models were first trained on the training dataset and then validated on the validation dataset for a maximum of 100 epochs.  However, to limit computation, we kept track of the minimum average validation error across all epochs.  An early stop was forced if the average validation error of the current epoch exceeded the minimum average validation error 5 times, as this would indicate the validation error was no longer decreasing.  Each model was then tested on the testing set and all losses (training losses, validation losses and test losses) were kept for later analysis.   In all cases, MSE was used as the loss metric.  
 
 
 ## Design elaboration
@@ -85,7 +85,7 @@ We decided to implement and evaluate the following attention mechanisms (Table \
 - regular self-attention (AM-1).  This is the mechanism described in the original transformer paper [@transformer].
 - convoluted self-attention as described in [@paper] (AM-2).  This mechanism generalizes the regular self-attention mechanism and uses a 1D convolution to transform the Query (Q) and Key (K) values before using them in the transformer architecture.
 - right padded convoluted self-attention (AM-3).  This is a variation of the mechanism described in [@paper].  Whereas [@paper] uses a symmetric convolution, here we use a convolution that focuses on the right hand side to transform Q and K values before using them in the transformer architecture.  Padding to the right is done to prevent looking at future values.
-- fourier transform based self-attention (AM-4).  This uses the fourier transform to decompose the input embedding in a vector of frequence values.  These vectors are used as a measure of similarity between keys and values to determine where to direct attention.
+- fourier transform based self-attention (AM-4).  This uses the fourier transform to decompose the input embedding in a vector of frequency values.  These vectors are used as a measure of similarity between keys and values to determine where to direct attention.
 
 
 | attention mechanism                  | abbreviation |
@@ -97,6 +97,8 @@ We decided to implement and evaluate the following attention mechanisms (Table \
 
 Table:  Attention mechanisms \label{table:attention-mechanisms}
 
+Transformer models have several tunable hyperparameters.  We first experimented with variations of number of layers, number of heads, levels of forward expansion, convolution kernel sizes and aggregation levels of input data for the base transformer model, as detailed in Table \ref{table:hyperparameters}.  This yielded very small differences in average test loss (see Table \ref{table:avg-test-losses-base-transformer}).  Given our limited computational resources, we decided to fix the number of layers to 2, the number of heads to 4, the forward expansion to 256 and the aggregation to ``1 day''.  For the models using a convolution (AM-2 and AM-3), we experimented with kernel sizes of [3, 6, 9].  In all scenarios, MSE was used as the measure to optimize for.
+
 | attention mechanism | hyperparameters                                                                           |
 |:--------------------|:------------------------------------------------------------------------------------------|
 | AM-1                | layers [2, 4, 6], heads [4, 8], forward expansion [256, 512], aggregation [1day, 4 hours] |
@@ -106,28 +108,9 @@ Table:  Attention mechanisms \label{table:attention-mechanisms}
 
 Table:  Hyperparameters \label{table:hyperparameters}
 
-Feature embedding was done using a combination of both positional encoding and a more specific temporal encoding, taking into account hour of the day, day of the week, day of the month and month of the year of the data.  The temporal encoding is added to the input vector and serves as an additional clue for the transformer model to link similar events.
+Feature embedding was done using a combination of both positional encoding and a more specific temporal encoding, taking into account hour of the day, day of the week, day of the month and month of the year of the data.  The temporal encoding was added to the input vector and served as an additional clue for the transformer model to link similar events.
 
-TODO extra features / embedding
-
--> feature + positional encoding + one-hot encoding van dag of maand of week "temporal encoding"
-
-TODO verder verduidelijken
-
-We start by splitting the dataset (feature X and target vector y) in a training set (35%, X~train~ and y~train~), a validation set (35%, X~validation~ and y~validation~) and a test set (30%, X~test~ and y~test~).  Then, a grid search with cross-validation is used to train the model on the training data and validate it against the validation set.  The grid search is parameterized by relevant parameters specific to the self-attention mechanism, see Table \ref{table:hyperparameters}.  Attention heads are varied between 2 and 8 in increments of 2.  For the convolution based attention mechanisms, we investigate kernel sizes ranging from 3 to 9 in increments of 2.  We use MSE as a measure to optimize for.  
-
-
-| attention mechanism | hyperparameter |              range |
-|:--------------------|:---------------|-------------------:|
-| AM-1                | attention head | range(2, 8) step 2 |
-| AM-2                | attention head | range(2, 8) step 2 |
-| AM-2                | kernel size    | range(3, 9) step 2 |
-| AM-3                | attention head | range(2, 8) step 2 |
-| AM-3                | kernel size    | range(3, 9) step 2 |
-| AM-4                | attention head | range(2, 8) step 2 |
-
-Table: hyperparameters used for the transformer models \label{table:hyperparameters}
-
+TODO TODO 
 In each iteration, we run the grid search using the training data, and predict against the test data (y~predicted_test~).  All predictions are stored for later analysis.  
 
 This entire design is repeated for a number of different scenarios.  We detail these in Table \ref{table:scenarios}.
@@ -225,3 +208,24 @@ TODO future work
 ![Typical recurrent patterns, here for September 2023](figures/recurrent-pattern-september2023.png){#fig:recurrent-pattern-september}
 
 ![Typical recurrent patterns, here for January 2023](figures/recurrent-pattern-january2023.png){#fig:recurrent-pattern-january}
+
+
+# Appendix B : Average test losses (base transformer) 
+
+| layers | heads | forward expansion | average test loss |
+|-------:|------:|------------------:|------------------:|
+| 2      |     4 |               256 |              TODO |
+| 2      |     8 |               256 |              TODO |
+| 4      |     4 |               256 |              TODO |
+| 4      |     8 |               256 |              TODO |
+| 6      |     4 |               256 |              TODO |
+| 6      |     8 |               256 |              TODO |
+| 2      |     4 |               512 |              TODO |
+| 2      |     8 |               512 |              TODO |
+| 4      |     4 |               512 |              TODO |
+| 4      |     8 |               512 |              TODO |
+| 6      |     4 |               512 |              TODO |
+| 6      |     8 |               512 |              TODO |
+
+
+Table: Average test losses for base transformer hyperparameter variations \label{table:avg-test-losses-base-transformer}
