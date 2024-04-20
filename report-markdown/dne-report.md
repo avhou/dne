@@ -75,7 +75,7 @@ We started by examining the dataset [@dataset]. Outlier analysis yielded no resu
 
 Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate influence on prediction MSE.  We first evaluated different models by varying some hyperparameters and by varying data aggregation (see Table \ref{table:hyperparameters}).  Given our limited computational resources, we chose a fixed set of hyperparameter and aggregation values for the rest of the experiments.  
 
-Data was split in a training part (63 %), a validation part (10 %), and a test part (27 %).  To accomplish this split, all data was sorted chronologically.  All data up to but not including 2020 served as training data, the data of 2020 up to but not including 2021 served as validation data, and data of 2021 and later served as test data.  Models were first trained on the training dataset and then validated on the validation dataset for a maximum of 100 epochs.  However, to limit computation, we kept track of the minimum average validation error across all epochs.  An early stop was forced if the average validation error of the current epoch exceeded the minimum average validation error 5 times, as this would indicate the validation error was no longer decreasing.  Each model was then tested on the testing set and all losses (training losses, validation losses and test losses) were kept for later analysis.   In all cases, MSE was used as the loss metric.  
+Data was split in a training part (63 %), a validation part (10 %), and a test part (27 %).  To accomplish this split, all data was sorted chronologically.  All data up to but not including 2020 served as training data, the data of 2020 up to but not including 2021 served as validation data, and data of 2021 and later served as test data.  Models were first trained on the training dataset and then validated on the validation dataset for a maximum of 100 epochs.  However, to limit computation, we kept track of the minimum average validation error across all epochs.  An early stop was forced if the average validation error of the running epoch exceeded the minimum average validation error 5 consecutive times, as this would indicate the validation error was no longer decreasing.  Each model was then tested on the testing set and all losses (training losses, validation losses and test losses) were kept for later analysis.   In all cases, MSE was used as the loss metric.  
 
 
 ## Design elaboration
@@ -110,34 +110,14 @@ Table:  Hyperparameters \label{table:hyperparameters}
 
 Feature embedding was done using a combination of both positional encoding and a more specific temporal encoding, taking into account hour of the day, day of the week, day of the month and month of the year of the data.  The temporal encoding was added to the input vector and served as an additional clue for the transformer model to link similar events.
 
-TODO TODO 
-In each iteration, we run the grid search using the training data, and predict against the test data (y~predicted_test~).  All predictions are stored for later analysis.  
-
-This entire design is repeated for a number of different scenarios.  We detail these in Table \ref{table:scenarios}.
-
-- scenario summer-season : In this scenario, we aim to investigate recurring events in the most sunny season of one year.  We concatenate all data of June, July, and August of 2023.
-- scenario winter-season : In this scenario, we aim to investigate recurring events in the least sunny season of one year.  We concatenate all data of December, January and February of 2023.
-- scenario summer-month : In this scenario, we aim to investigate recurring events in the most sunny month of all years (period 2014-2023).  We concatenate all data of August for years 2014-2023.
-- scenario winter-month : In this scenario, we aim to investigate recurring events in the least sunny month of all years (period 2014-2023).  We concatenate all data of February for years 2014-2023.
-
-
-| scenario      | description                                              |
-|:--------------|:---------------------------------------------------------|
-| summer-season | concatenation of June, July, and August of 2023          |
-| winter-season | concatenation of December, January, and February of 2023 |
-| summer-month  | concatenation of August data of period 2014-2023         |
-| winter-month  | concatenation of February data of period 2014-2023       |
-
-Table: learning scenarios \label{table:scenarios}
-
 ## Implementation
 
-All code and data is available in a github repository [@github].  All deep learning models were implemented using the pytorch python package.  We recap the most important files here : 
+All code and data is available in a github repository [@github].  All deep learning models were implemented using the pytorch python package, visualisation was done using matplotlib and seaborn.  We recap the most important files here : 
 
 - `building_blocks.py` contains all pytorch modules and models, and other support code to execute different scenarios.
 - `datasets.py` contains the code to load and aggregate the Elia data into one pytorch dataloader.
 - `figures.ipynb` is a jupyter notebook that contains code to generate figures.
-- `stats.ipynb` is a jupyter notebook that contains code to check statistical validity.
+- `stats.ipynb` is a jupyter notebook that contains code to check statistical validity and generate tables about statistics.
 - `scenario-base-transformer.ipynb` is a jupyter notebook focusing on the execution of scenario using a vanilla transformer
 - TODO andere notebooks
 
@@ -145,45 +125,20 @@ All code and data is available in a github repository [@github].  All deep learn
 
 ## Evaluation 
 
-TODO beschrijven wat we exact willen meten en hoe dit te meten (loss) (accuracy?)
+To evaluate the performance of the transformer models we decided to use MSE against the test set. To evaluate whether AM-2, AM-3 and AM-4 perform better (using MSE as a metric) compared to AM-1, we formulate the following H~0~ hypothesis : 
 
-To evaluate whether ... TODO ... self-attention ... , we formulate the following H~0~ hypothesis : 
+> **H~0~ : There is no difference between AM-1 and AM-2, AM-3, AM-4.**
 
-> **H~0~ : A self-attention mechanism using XYZ is not better at predicting ... than regular self-attention .**
+If the p-value is below $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that there is indeed a difference between the non-standard self-attention mechanisms.
 
-If the p-value is below $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that there is indeed a difference between the TODO.  
-
+TODO 
 -> vergelijken met base line voorspellingen elia?
--> regressieanalyse van de residuals.
 
 ## Results
 
-### Scenario 1 : summer-season
-
-This scenario uses data for June, July and August of 2023 for forecasting.  Results are summarized in Table \ref{table:ttest-original}.
-
-| mechanism | metric mean | AM-1 mean | t-test value |  p-value | H~0~ rejected |
-|-----------|------------:|----------:|-------------:|---------:|:-------------:|
-| MA-2      |      0.9580 |    0.9864 |    -1.77E+01 | 2.29E-32 | yes           |
-| MA-3      |      0.9858 |    0.9864 |    -1.84E+01 | 1.17E-33 | yes           |
-| MA-4      |      0.9782 |    0.9864 |    -2.58E+01 | 9.62E-46 | yes           |
-
-
-Table: one sample t-test to determine whether TODO \label{table:ttest-original}
 
 TODO resultaten beschrijven
 
-### Scenario 2 : winter-season
-
-TODO idem hierboven
-
-### Scenario 3 : summer-month
-
-TODO idem hierboven
-
-### Scenario 4 : winter-month
-
-TODO idem hierboven
 
 # Conclusions and Discussion
 
@@ -212,20 +167,14 @@ TODO future work
 
 # Appendix B : Average test losses (base transformer) 
 
-| layers | heads | forward expansion | average test loss |
-|-------:|------:|------------------:|------------------:|
-| 2      |     4 |               256 |              TODO |
-| 2      |     8 |               256 |              TODO |
-| 4      |     4 |               256 |              TODO |
-| 4      |     8 |               256 |              TODO |
-| 6      |     4 |               256 |              TODO |
-| 6      |     8 |               256 |              TODO |
-| 2      |     4 |               512 |              TODO |
-| 2      |     8 |               512 |              TODO |
-| 4      |     4 |               512 |              TODO |
-| 4      |     8 |               512 |              TODO |
-| 6      |     4 |               512 |              TODO |
-| 6      |     8 |               512 |              TODO |
-
+| layers | heads | forward expansion | average | stddev |
+|-------:|------:|------------------:|--------:|-------:|
+|      2 |     4 |               256 |  0.0799 | 0.0169 |
+|      2 |     8 |               256 |  0.0906 | 0.0230 |
+|      4 |     4 |               256 |  0.0875 | 0.0172 |
+|      4 |     8 |               256 |  0.0841 | 0.0305 |
+|      6 |     4 |               256 |  0.0877 | 0.0208 |
+|      6 |     4 |               512 |  0.1086 | 0.0253 |
+|      6 |     8 |               256 |  0.1038 | 0.0249 |
 
 Table: Average test losses for base transformer hyperparameter variations \label{table:avg-test-losses-base-transformer}
