@@ -59,9 +59,9 @@ There are obvious differences in solar power generation between summer months an
 
 ## Data pre-processing
 
-The Elia data [@dataset] is very fine grained and contains $24*4=96$ measurements per day, resulting in $30*24*4=2880$ measurements for a 30 day month.  In order to be able to limit memory and computational resources, we have added the possibility to aggregate these dataset.  Possible choices are **(i)** no aggregation, **(ii)** hourly aggregation, **(iii)** aggregation every 4 hours (starting from 00:00, resulting in 6 values per day), and finally **(iv)** aggregation per day.  Aggregation is done by averaging the values in the selected timeframe.
+The Elia data [@dataset] is very fine grained and contains $24*4=96$ measurements per day, resulting in $30*24*4=2880$ measurements for a 30 day month.  In order to be able to limit memory and computational resources, we have added the possibility to aggregate this dataset.  Possible choices are **(i)** no aggregation, **(ii)** hourly aggregation, **(iii)** aggregation every 4 hours (starting from 00:00, resulting in 6 values per day), and finally **(iv)** aggregation per day.  Aggregation is done by averaging the values in the selected timeframe.
 
-Elia provides a lot of historical data, going from February of 2013 to February of 2024.  All data were taken into account, in order to maximize the possibility of finding interesting patterns in the data.  Input length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic complexity in $L$.  Taking too few measurements into acount, it will be difficult to spot similar events in the past.  Taking too many measurements into account, it will be prohibitely expensive in terms of memory and computational resources to train and evaluate the model.  The model implemented allowed for easy selection of input length $L$.  This is related to the level of aggregations in terms of how many hours or days this represents, i.e. when using hourly aggregating and taking 24 input measurements, we are looking at the data of exactly one day.
+Elia provides a lot of historical data, going from February of 2013 to February of 2024.  All data were taken into account, in order to maximize the possibility of finding interesting patterns in the data.  Input length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic complexity in $L$.  Taking too few measurements into acount, it will be difficult to spot similar events in the past.  Taking too many measurements into account, it will be prohibitely expensive in terms of memory and computational resources to train and evaluate the model.  The model implemented allowed for easy selection of input length $L$.  This is related to the level of aggregations in terms of how many hours or days this represents, i.e. when using hourly aggregation and taking 24 input measurements, we are looking at the data of exactly one day.
 
 ### Outlier analysis {#sec:outlier}
 
@@ -73,10 +73,11 @@ A visual outlier analysis yielded no abnormal or obiously wrong values.  This ma
 
 We started by examining the dataset [@dataset]. Outlier analysis yielded no results, and we performed a number of standard checks on the quality of the data and decided not to exclude any data from the dataset.  
 
-Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate influence on prediction MSE.  We first evaluated different models by varying some hyperparameters and by varying data aggregation (see Table \ref{table:hyperparameters}).  Given our limited computational resources, we chose a fixed set of hyperparameter and aggregation values for the rest of the experiments.  
+Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate influence on prediction MSE.  We first evaluated different models by varying some hyperparameters and by varying data aggregation (see Table \ref{table:hyperparameters}).  Given our limited computational resources, we chose a fixed set of hyperparameter and aggregation values for the rest of the experiments.  All experiments used a forecast size of 1.  Note that this is linked to the aggregation level, i.e. when using ``1 day'' aggregation, forecasting one value means forecasting the next day.  When using 1h aggregation, forecasting one value means forecasting the next hour.
 
 Data was split in a training part (63 %), a validation part (10 %), and a test part (27 %).  To accomplish this split, all data was sorted chronologically.  All data up to but not including 2020 served as training data, the data of 2020 up to but not including 2021 served as validation data, and data of 2021 and later served as test data.  Models were first trained on the training dataset and then validated on the validation dataset for a maximum of 100 epochs.  However, to limit computation, we kept track of the minimum average validation error across all epochs.  An early stop was forced if the average validation error of the running epoch exceeded the minimum average validation error 5 consecutive times, as this would indicate the validation error was no longer decreasing.  Each model was then tested on the testing set and all losses (training losses, validation losses and test losses) were kept for later analysis.   In all cases, MSE was used as the loss metric.  
 
+In order to compare the prediction of the trained transformer models to the Elia predictions, we kept the Elia predictions in the test set as an additional feature.  This feature was not used for training or validation.  Elia predictions are done per quarter hour, and were aggregated using averaging where necessary to obtain the same aggregation as the input data.
 
 ## Design elaboration
 
@@ -97,14 +98,14 @@ We decided to implement and evaluate the following attention mechanisms (Table \
 
 Table:  Attention mechanisms \label{table:attention-mechanisms}
 
-Transformer models have several tunable hyperparameters.  We first experimented with variations of number of layers, number of heads, levels of forward expansion, convolution kernel sizes and aggregation levels of input data for the base transformer model, as detailed in Table \ref{table:hyperparameters}.  This yielded very small differences in average test loss (see Table \ref{table:avg-test-losses-base-transformer}).  Given our limited computational resources, we decided to fix the number of layers to 2, the number of heads to 4, the forward expansion to 256 and the aggregation to ``1 day''.  For the models using a convolution (AM-2 and AM-3), we experimented with kernel sizes of [3, 6, 9].  In all scenarios, MSE was used as the measure to optimize for.
+Transformer models have several tunable hyperparameters.  We first experimented with variations of number of layers, number of heads, levels of forward expansion, convolution kernel sizes and aggregation levels of input data for the **base transformer model**, as detailed in Table \ref{table:hyperparameters}.  This yielded very small differences in average test loss (see Table \ref{table:avg-test-losses-base-transformer}).  Given our limited computational resources, we decided to fix the number of layers to 2, the number of heads to 4, the forward expansion to 256 and the aggregation to ``1 day''.  For the models using a convolution (AM-2 and AM-3), we experimented with kernel sizes of [3, 6, 9].  In all scenarios, MSE was used as the measure to optimize for.
 
 | attention mechanism | hyperparameters                                                                           |
 |:--------------------|:------------------------------------------------------------------------------------------|
 | AM-1                | layers [2, 4, 6], heads [4, 8], forward expansion [256, 512], aggregation [1day, 4 hours] |
 | AM-2                | layers [2], heads [4], forward expansion [256], aggregation [1day], kernel size [3, 6, 9] |
 | AM-3                | layers [2], heads [4], forward expansion [256], aggregation [1day], kernel size [3, 6, 9]                                                                                      |
-| AM-4                | TODO                                                                                      |
+| AM-4                | layers [2], heads [4], forward expansion [256], aggregation [1day], TODO                                                                                      |
 
 Table:  Hyperparameters \label{table:hyperparameters}
 
@@ -114,7 +115,7 @@ Feature embedding was done using a combination of both positional encoding and a
 
 All code and data is available in a github repository [@github].  All deep learning models were implemented using the pytorch python package, visualisation was done using matplotlib and seaborn.  We recap the most important files here : 
 
-- `building_blocks.py` contains all pytorch modules and models, and other support code to execute different scenarios.
+- `building_blocks.py` contains all pytorch modules and models, the different attention mechanism, input embedding and other support code to execute different scenarios.
 - `datasets.py` contains the code to load and aggregate the Elia data into one pytorch dataloader.
 - `figures.ipynb` is a jupyter notebook that contains code to generate figures.
 - `stats.ipynb` is a jupyter notebook that contains code to check statistical validity and generate tables about statistics.
@@ -125,29 +126,36 @@ All code and data is available in a github repository [@github].  All deep learn
 
 ## Evaluation 
 
-To evaluate the performance of the transformer models we decided to use MSE against the test set. To evaluate whether AM-2, AM-3 and AM-4 perform better (using MSE as a metric) compared to AM-1, we formulate the following H~0~ hypothesis : 
+### Evalution of RQ 1
 
-> **H~0~ : There is no difference between AM-1 and AM-2, AM-3, AM-4.**
+In order to evaluate the first research question, we formulate the following H~0~ hypothesis : 
 
-If the p-value is below $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that there is indeed a difference between the non-standard self-attention mechanisms.
+> **H~0~ : There is no difference between AM-1 on the one hand, and AM-2, AM-3 and AM-4 on the other hand.**
 
-TODO 
--> vergelijken met base line voorspellingen elia?
+If the p-value is below $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that there is indeed a difference between the standard self-attention mechanism on the one hand and the non-standard self-attention mechanisms on the other hand.
+
+### Evaluation of RQ 2
+
+In order to evaluate the second research question, we formulate the following H~0~ hypothesis : 
+
+> **H~0~ : There is no difference between the prediction done by attention mechanisms AM-1, AM-2, AM-3 and AM-4 and the prediction done by Elia.**
+
+If the p-value is below $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that there is indeed a difference between the transformer based predictions and the Elia predictions.  Note that Elia provides no details on their prediction model, so this is in fact a comparison between the Elia prediction model and a transformer based prediction model.
+
 
 ## Results
 
+### Results of RQ 1
+
+### Results of RQ 2
 
 TODO resultaten beschrijven
 
 
 # Conclusions and Discussion
 
-In this study, we have used xyz dataset and pre-processed thus and thus.
+In this paper, we analysed the role of attention mechanisms in transformer models for forecasting values when using timeseries data.  Several attention mechanisms were evaluated, **(i)** regular self-attention, **(ii)** convoluted self-attention, **(iii)** right padded convoluted self-attention and **(iv)** fourier transform based self-attention.
 
-We evaluated x self-attention mechanisms, x, y and z in x different scenarios.  Results were : 
-
-- result 1
-- result 2
 
 TODO some discussion
 
