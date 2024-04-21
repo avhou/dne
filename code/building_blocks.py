@@ -184,16 +184,16 @@ class CausalConv1d(torch.nn.Conv1d):
 
 #### Asymmetric Padding Conv1d encoding
 class AsymmetricConv1d(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, padding_right, bias=True):
+    def __init__(self, in_channels, out_channels, kernel_size, bias=True):
         super(AsymmetricConv1d, self).__init__()
         self.conv = nn.Conv1d(in_channels, out_channels, kernel_size, bias=bias)
-        self.padding_right = padding_right
+        self.padding_right = kernel_size - 1
 
     def forward(self, x):
-        # Apply asymmetric padding
         x = F.pad(x, (0, self.padding_right))
+        x = self.conv(x)
         x = F.tanh(x)
-        return self.conv(x)
+        return x
 
 
 ### Encoder
@@ -209,7 +209,6 @@ class TimeSeriesEncoder(nn.Module):
         forward_expansion,
         dropout,
         kernel_size,
-        padding_right,
     ):
         super(TimeSeriesEncoder, self).__init__()
         self.input_dim = input_dim
@@ -218,7 +217,6 @@ class TimeSeriesEncoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
         self.kernel_size = kernel_size
-        self.padding_right = padding_right
 
         self.temporal_embedding = TemporalEncoding(embed_size)
         self.pos_embedding = torch.nn.Embedding(embed_size, 512)
@@ -303,12 +301,9 @@ class CausalConv1dEncoder(TimeSeriesEncoder):
 
 #### Asym Padding Conv Encodig
 class AsymPaddingConv1dEncoder(TimeSeriesEncoder):
-    # Tested with kernel_size=3, padding_right=2
     def __init__(self, *args, **kwargs):
         super(AsymPaddingConv1dEncoder, self).__init__(*args, **kwargs)
-        self.qk_feature_embedding = AsymmetricConv1d(
-            self.input_dim, self.embed_size, self.kernel_size, self.padding_right
-        )
+        self.qk_feature_embedding = AsymmetricConv1d(self.input_dim, self.embed_size, self.kernel_size)
         self.v_feature_embedding = AsymmetricConv1d(self.input_dim, self.embed_size, 1, 0)
 
     def encoding(self, x):
@@ -349,7 +344,6 @@ class TimeSeriesTransformerParams:
     forecast_size: int
     encoder_type: str
     kernel_size: int
-    padding_right: int
 
 
 ### Transformer
@@ -366,7 +360,6 @@ class TimeSeriesTransformer(nn.Module):
         forecast_size=1,
         encoder_type="PositionalEncodingEncoder",
         kernel_size=9,
-        padding_right=2,
     ):
         super(TimeSeriesTransformer, self).__init__()
 
@@ -383,7 +376,7 @@ class TimeSeriesTransformer(nn.Module):
             raise ValueError(f"Unknown encoder type: {encoder_type}")
 
         self.encoder = Encoder(
-            input_dim, embed_size, num_layers, heads, device, forward_expansion, dropout, kernel_size, padding_right
+            input_dim, embed_size, num_layers, heads, device, forward_expansion, dropout, kernel_size
         )
 
         self.decoder = TimeSeriesLinearDecoder(embed_size, forecast_size)
@@ -411,7 +404,6 @@ class TimeSeriesTransformer(nn.Module):
             forecast_size=params.forecast_size,
             encoder_type=params.encoder_type,
             kernel_size=params.kernel_size,
-            padding_right=params.padding_right,
         )
 
 
@@ -496,7 +488,8 @@ class Scenario:
         criterion = nn.MSELoss()
         optimizer = optim.Adam(model.parameters(), lr=0.001)
         scheduler = ReduceLROnPlateau(optimizer, "min", factor=0.5, patience=5, verbose=True)
-        scaler = torch.cuda.amp.GradScaler() if torch.cuda.is_available() else None
+        #scaler = torch.cuda.amp.GradScaler() if torch.cuda.is_available() else None
+        scaler = None
 
         print(f"checking paths, base path is {self.params.base_path}")
         weights_dir = os.path.join(self.params.base_path, "weights")
@@ -586,7 +579,7 @@ def generate_dataset(cf: ConfigSettings, frequency: Literal["15min", "1h", "4h",
 
 
 def generate_model_params(
-    cf: ConfigSettings, device: str, encoder_type: str, num_layer: int, num_head: int, forward_expansion: int
+    cf: ConfigSettings, device: str, encoder_type: str, num_layer: int, num_head: int, forward_expansion: int, kernel_size: int =3
 ) -> TimeSeriesTransformerParams:
     return TimeSeriesTransformerParams(
         input_dim=cf.model.context_length,
@@ -598,8 +591,7 @@ def generate_model_params(
         dropout=cf.model.dropout,
         forecast_size=cf.model.forecast_size,
         encoder_type=encoder_type,
-        kernel_size=cf.model.kernel_size,
-        padding_right=cf.model.padding_right,
+        kernel_size=kernel_size,
     )
 
 
@@ -659,4 +651,39 @@ def generate_scenarios(
                         base_path="/dne" if cf.runtime.run_in_colab else base_path,
                     )
                     params.append((model_params, scenario_params))
+    return params
+
+def generate_scenarios_conv(
+    base_name: str,
+    device: str,
+    encoder_type: str,
+    frequencies: List[Literal["15min", "1h", "4h", "D"]],
+    layers: List[int],
+    heads: List[int],
+    forward_expansions: List[int],
+    kernel_sizes: List[int],
+    base_path: str = "./",
+) -> List[Tuple[TimeSeriesTransformerParams, ScenarioParams]]:
+    cf = ConfigSettings(config_path="config.ini")
+    params = []
+    for frequency in frequencies:
+        (train_loader, validation_loader, test_loader) = generate_loaders(cf, frequency)
+
+        for num_layer in layers:
+            for num_head in heads:
+                for forward_expansion in forward_expansions:
+                    for kernel_size in kernel_sizes:
+                        model_params = generate_model_params(
+                            cf, device, encoder_type, num_layer, num_head, forward_expansion, kernel_size
+                        )
+                        scenario_params = ScenarioParams(
+                            name=f"elia-{base_name}-freq{frequency}-layers{num_layer}-heads{num_head}-fe{forward_expansion}-ks{kernel_size}",
+                            device=device,
+                            epochs=100,
+                            dataloader_train=train_loader,
+                            dataloader_validation=validation_loader,
+                            dataloader_test=test_loader,
+                            base_path="/dne" if cf.runtime.run_in_colab else base_path,
+                        )
+                        params.append((model_params, scenario_params))
     return params
