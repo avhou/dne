@@ -8,6 +8,7 @@ tqdm
 matplotlib
 seaborn
 scipy
+statsmodels
 mltable
 azure-ai-ml
 azure-identity
