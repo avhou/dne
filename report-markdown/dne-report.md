@@ -151,32 +151,28 @@ As discussed in [the design elaboration](#sec:design-elaboration), we evaluated 
 
 Table: Used hyperparameters \label{table:used-hyperparameters}
 
-In order to evaluate the first research question, we formulate the following H~0~ hypotheses : 
+In order to evaluate the first research question, we formulate the following H~0~ hypothesis : 
 
-> **H~01~ : Two or more groups of AM-1, AM-2, AM-3 and AM-4 have the same population mean.**
+> **H~0~ : The performances of the four attention mechanisms (AM-1, AM-2, AM-3, AM-4) are equal.**
 
-Whether two or more groups have the same population mean will be checked by an ANOVA test.  If the p-value of this test $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that not all groups have the same population mean.
-
-> **H~02~ : All means of AM-1, AM-2, AM-3 and AM-4 come from the same population.**
-
-Whether all means being compared come from the same population will be checked by a Tuckey HSD test.  If the p-value of this test $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that not all means being compared come from the same population.
+To validate whether the performances of the attention mechanisms are equal, we will run a one-way ANOVA test.  If the p-value of this test is below $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that at least one of the attention mechanisms has a performance that differs from the other attention mechanisms.  If the one-way ANOVA test shows a difference in performance between the groups, we will use a post hoc Tuckey HSD test to compare the mutual differences between the groups.
 
 ### Evaluation of RQ 2
 
 In order to evaluate the second research question, we formulate the following H~0~ hypothesis : 
 
-> **H~0~ : There is no difference between the prediction done by attention mechanisms AM-1, AM-2, AM-3 and AM-4 and the prediction done by Elia.**
+> **H~0~ : The performances of the four attention mechanism (AM-1, AM-2, AM-3, AM-4) are equal to the performance of the Elia model.**
 
-If the p-value is below $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that there is indeed a difference between the transformer based predictions and the Elia predictions.  Note that Elia provides no details on their prediction model, so this is in fact a comparison between the Elia prediction model and a transformer based prediction model.
+If the p-value is below $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that there is indeed a difference between the performance of the transformer based predictions and the Elia predictions.  Note that Elia provides no details on their prediction model, so this is in fact a comparison between the Elia prediction model and a transformer based prediction model.
 
 
 ## Results
 
 ### Results of RQ 1
 
-ANOVA assumptions (normality and homogeneity of variances) were checked on the test losses.   First, normality checks were done both graphically (Figure @{fig:anova-normality-check}) and using a shapiro test (Table \ref{table:anova-normality-check}).  Both the graphical test and the shapiro test indicate the fourier data is not normally distributed.  However, the graphical test shows it is close to being normally distributed, and ANOVA should be robust to small deviations from normality.
+One-way ANOVA assumptions (normality and homogeneity of variances) were checked on the test losses.   First, normality checks were done both graphically (Figure @{fig:anova-normality-check}) and using a shapiro test (Table \ref{table:anova-normality-check}).  Both the graphical test and the shapiro test indicate the fourier data is not normally distributed.  However, the graphical test shows it is close to being normally distributed, and one-way ANOVA should be robust to small deviations from normality.
 
-![ANOVA normality check](figures/anova-normality-check.png){#fig:anova-normality-check}
+![One-way ANOVA normality check](figures/anova-normality-check.png){#fig:anova-normality-check}
 
 | attention mechanism | test value | p-value |
 |--------------------:|-----------:|--------:|
@@ -185,24 +181,24 @@ ANOVA assumptions (normality and homogeneity of variances) were checked on the t
 |                AM-3 |     0.9879 |  0.9604 |
 |                AM-4 |     0.9270 |  0.0228 |
 
-Table: ANOVA normality check \label{table:anova-normality-check}
+Table: One-way ANOVA normality check \label{table:anova-normality-check}
 
-The homogeneity of variances was checked using a Levene's test.  This showed variances were indeed equal (test value = $8.4004$, p-value = $3.6629\mathrm{e}{-5}$).  Therefore we concluded an ANOVA test could be used, yielding a test value of $147.4071$ and a p-value of $1,4862\mathrm{e}{-5}$, indicating the H~01~ hypothesis should be rejected and we can conclude that not all groups have the same population mean.
+The homogeneity of variances was checked using a Levene's test.  This showed variances were not equal (test value = $9.9881$, p-value = $5.4035\mathrm{e}{-6}$).  Therefore we concluded a one-way ANOVA test could be used, yielding an F-stat value of $310.7705$ and a p-value of $2.4661\mathrm{e}{-38}$, indicating the H~0~ hypothesis should be rejected and we can conclude that at least one of the attention mechanisms has a performace that differs from the other attention mechanisms.
 
-For H~02~ we conducted a Tuckey HSD test, see Table \ref{table:tuckey}.  In all but one case (comparison between AM-1 and AM-2), we can reject the H~02~ hypothesis and conclude the mutual means between the groups are not from the same population.
+To investigate the differences between the attention mechanisms,  we conducted a post hoc Tuckey HSD test, see Table \ref{table:tuckey}.  This test shows the biggest differences in mean RMSE for AM-4 compared to the other attention mechanisms.  Note that the Tuckey test in the `statsmodels` python package reports the mean difference of group2 - group1, so a negative value indicates a lower mean RMSE for group 2 compared to group1.  AM-1 and AM-3 seem to differ very little in their performance.
 
 | group1 | group2 | meandiff |  p-adj |   lower |   upper | reject |
 |-------:|-------:|---------:|-------:|--------:|--------:|-------:|
-|   AM-1 |   AM-2 |  -0.0045 | 0.7253 | -0.0157 |  0.0067 |  False |
-|   AM-1 |   AM-3 |   0.0198 | 0.0001 |  0.0086 |  0.0311 |   True |
-|   AM-1 |   AM-4 |  -0.0659 |    0.0 | -0.0772 | -0.0547 |   True |
-|   AM-2 |   AM-3 |   0.0243 |    0.0 |  0.0131 |  0.0356 |   True |
-|   AM-2 |   AM-4 |  -0.0614 |    0.0 | -0.0727 | -0.0502 |   True |
-|   AM-3 |   AM-4 |  -0.0858 |    0.0 |  -0.097 | -0.0745 |   True |
+|   AM-1 |   AM-2 |  -0.0164 | 0.0036 | -0.0286 | -0.0042 |   True |
+|   AM-1 |   AM-3 |   0.0079 |  0.332 | -0.0043 |  0.0202 |  False |
+|   AM-1 |   AM-4 |  -0.0778 |    0.0 |   -0.09 | -0.0656 |   True |
+|   AM-2 |   AM-3 |   0.0243 |    0.0 |  0.0121 |  0.0366 |   True |
+|   AM-2 |   AM-4 |  -0.0614 |    0.0 | -0.0737 | -0.0492 |   True |
+|   AM-3 |   AM-4 |  -0.0858 |    0.0 |  -0.098 | -0.0735 |   True |
 
 Table: Tuckey test \label{table:tuckey}
 
-The test loss mean and standard deviation values are given in Table \ref{table:test-losses}.  This shows the fourier based attention mechanism yields the best results for our specific dataset, outperforming the causal convolution based attention (AM-2) 5 times.
+The test loss mean and standard deviation values are given in Table \ref{table:test-losses}.  This shows once more that the fourier based attention mechanism (AM-4) yields the best results for our specific dataset, outperforming the causal convolution based attention (AM-2) 5 times.
 
 | attention mechanism | average | stddev |
 |--------------------:|--------:|-------:|
@@ -213,6 +209,15 @@ The test loss mean and standard deviation values are given in Table \ref{table:t
 
 Table: Test losses for the attention mechanisms \label{table:test-losses}
 
+To get an indication about where attention is focused, we visualised the attention focus for a random input sequence for each of the different attention mechanisms.  Figure @{fig:attention-am-1} illustrates this for AM-1, Figure @{fig:attention-am-2} illustrates this for AM-2, Figure @{fig:attention-am-3} illustrates this for AM-3.
+
+![Attention visualisation for AM-1](figures/attention-am-1.png){#fig:attention-am-1}
+
+![Attention visualisation for AM-2](figures/attention-am-2.png){#fig:attention-am-2}
+
+![Attention visualisation for AM-3](figures/attention-am-3.png){#fig:attention-am-3}
+
+TODO TODO AM-4
 
 ### Results of RQ 2
 
