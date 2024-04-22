@@ -9,6 +9,7 @@ matplotlib
 seaborn
 scipy
 statsmodels
+pingouin
 mltable
 azure-ai-ml
 azure-identity
