@@ -2,3 +2,10 @@
 code/.idea
 **/__pycache__
 **/secrets.ini
+code/figures.ipynb
+code/weights/elia-base-transformer-freq4h-layers2-heads4-fe256_model_best_train.pth
+code/weights/elia-base-transformer-freq4h-layers2-heads4-fe256_model_best_validation.pth
+code/weights/elia-base-transformer-freq4h-layers2-heads4-fe256_model_last_epoch.pth
+code/weights/elia-base-transformer-freqD-layers2-heads4-fe256_model_best_train.pth
+code/weights/elia-base-transformer-freqD-layers2-heads4-fe256_model_best_validation.pth
+code/weights/elia-base-transformer-freqD-layers2-heads4-fe256_model_last_epoch.pth

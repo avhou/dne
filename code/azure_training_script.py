@@ -16,23 +16,22 @@ def main():
     mlflow.start_run()
 
     os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(os.path.join(args.output_dir, "weights"), exist_ok=True)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    frequencies = ["D", "4h"]
+    frequencies = ["4h"]
     layers = [2]
     heads = [4]
     forward_expansions = [256]
     for model_params, scenario_params in generate_scenarios(
-        "base-transformer", device, "FourierEncoder", frequencies, layers, heads, forward_expansions
+        "base-transformer", device, "FourierEncoder", frequencies, layers, heads, forward_expansions, args.output_dir
     ):
         print(f"will execute scenario {scenario_params.name}")
         model = TimeSeriesTransformer.from_params(model_params).to(device)
         scenario = Scenario(scenario_params)
         scenario.execute(model)
+        torch.save(model, os.path.join(args.output_dir, f"{scenario_params.name}-model.pt"))
     print(f"execution done")
-
-    torch.save(model, os.path.join(args.output_dir, "model.pt"))
-
     mlflow.end_run()
 
 

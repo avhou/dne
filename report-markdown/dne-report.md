@@ -26,13 +26,13 @@ The original transformer architecture introduces a quadratic time and space comp
 
 # Goal
 
-In this paper, we focus on using transformers for time series forecasting. We aim to compare different attention mechanism and determine which mechanism best captures the outcome of past events.  We formulate a first research question : 
+In this paper, we focus on using transformers for time series forecasting. We aim to compare different attention mechanism to determine which mechanism best captures the outcome of past events.  We formulate a first research question : 
 
 > **RQ 1 : When comparing regular self-attention, convoluted self-attention, right-padded convoluted self-attention and fourier transform based self-attention, which mechanism best predicts future values using mean square error (MSE) as metric?**
 
-The Elia dataset used is fully described in [the dataset description section](#sec:dataset).  It not only contains time series data, but also day+1 and day+7 predictions of the same data.  We formulate a second research question : 
+The Elia dataset used is fully described in [the dataset description section](#sec:dataset).  It not only contains time series data, but also next-day and next-week predictions of the same data.  We formulate a second research question : 
 
-> **RQ 2 : Is the MSE of a transformer model better than the Elia prediction model?**
+> **RQ 2 : Is the RMSE of a transformer model better than the Elia prediction model?**
 
 Firstly, this report will look at the characteristics of the dataset used and discuss pre-processing steps.  Then, we will consider several attention mechanisms,  discuss design and implementation details and finally evaluate the performance of these attention mechanisms on the dataset.
 
@@ -40,7 +40,7 @@ Firstly, this report will look at the characteristics of the dataset used and di
 
 ## Dataset description {#sec:dataset}
 
-We use data from Elia [@elia], which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast datasets.  These contain time series of actual measured power in megawatt (MW), and also  day+1 and day+7 predictions of solar power output in MW.  Data is available for a period of 12 years (February 2012 until now) in monthly datasets.  Measurements and predictions are recorded every quarter of an hour.  The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points in Table \ref{table:features}.
+We use data from Elia [@elia], which operates the electricity transmission network in Belgium. In particular, we use the solar power forecast dataset. These contain time series of actual measured power in megawatt (MW), and also next-day and next-week predictions of solar power output in MW. The data is available for a period of 12 years (February 2012 until now) in monthly datasets. Measurements and predictions are available for every fifteen minutes. The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points in Table \ref{table:features}.
 
 | feature          | description                           | range                            |
 |:-----------------|:--------------------------------------|:---------------------------------|

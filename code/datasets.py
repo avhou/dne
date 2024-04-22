@@ -39,6 +39,7 @@ class EliaSolarDataset(Dataset):
         self.datetime_column = datetime_column
         self.target_column = target_column
         self.frequency = frequency
+        self.data = self.aggregate_resolution(self.data)
         self.data = self.__preprocess(self.data)
 
         self.train_test_split_index = (
@@ -73,16 +74,20 @@ class EliaSolarDataset(Dataset):
             pd.DataFrame: The original or preprocessed dataframe.
         """
         df = pd.read_csv(self.csv_path)
+        df = self.aggregate_resolution(df)
         if preprocessed:
             df = self.__preprocess(df)
         return df
 
-    def __preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
+    def aggregate_resolution(self, df: pd.DataFrame) -> pd.DataFrame:
         df[self.datetime_column] = pd.to_datetime(df[self.datetime_column], format="%Y-%m-%d %H:%M:%S")
         df = df.groupby(pd.Grouper(key=self.datetime_column, freq=self.frequency)).sum().reset_index()
+        return df
+
+    def __preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df[[self.datetime_column, self.target_column]]
-        scaler = MinMaxScaler()
-        df[self.target_column] = scaler.fit_transform(df[[self.target_column]]).flatten()
+        self.scaler = MinMaxScaler()
+        df[self.target_column] = self.scaler.fit_transform(df[[self.target_column]]).flatten()
         return df
 
     def __len__(self):

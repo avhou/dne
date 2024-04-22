@@ -26,12 +26,12 @@ env_docker_context = Environment(
 ml_client.environments.create_or_update(env_docker_context)
 
 cluster = AmlCompute(
-    name="ped-detection-compute",
+    name="timeseries-transfromer-compute",
     type="amlcompute",
-    size="Standard_E4ds_v4",
+    size="Standard_E16ds_v4",
     location="westeurope",
     min_instances=0,
-    max_instances=2,
+    max_instances=1,
     idle_time_before_scale_down=120,
 )
 

@@ -12,8 +12,9 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import os
 import datetime
 from datasets import EliaSolarDataset
+from tqdm import trange
 from utils import ConfigSettings
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 from scipy.fft import rfft
 import matplotlib.pyplot as plt
 
@@ -505,7 +506,7 @@ class Scenario:
             os.makedirs(weights_dir, exist_ok=True)
 
         print(f"training and validating the model")
-        for epoch in range(self.params.epochs):
+        for epoch in trange(self.params.epochs):
             avg_train_loss = self.train_one_epoch(
                 model, self.params.dataloader_train, self.params.device, optimizer, criterion, scaler
             )
@@ -604,8 +605,8 @@ def generate_model_params(
 
 
 def generate_loaders(
-    cf: ConfigSettings, frequency: Literal["15min", "1h", "4h", "D"]
-) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
+    cf: ConfigSettings, frequency: Literal["15min", "1h", "4h", "D"], shuffle: bool = True
+) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader, EliaSolarDataset]:
     # setup the dataset, once per frequency
     solar_dataset = generate_dataset(cf, frequency)
 
@@ -616,16 +617,16 @@ def generate_loaders(
     test_indices = indices[solar_dataset.train_test_split_index :]
 
     # Creating data samplers and loaders:
-    train_sampler = SubsetRandomSampler(train_indices)
-    valid_sampler = SubsetRandomSampler(val_indices)
-    test_sampler = SubsetRandomSampler(test_indices)
+    train_sampler = SubsetRandomSampler(train_indices) if shuffle else SequentialSampler(train_indices)
+    valid_sampler = SubsetRandomSampler(val_indices) if shuffle else SequentialSampler(val_indices)
+    test_sampler = SubsetRandomSampler(test_indices) if shuffle else SequentialSampler(test_indices)
 
     train_loader = torch.utils.data.DataLoader(solar_dataset, batch_size=cf.model.batch_size, sampler=train_sampler)
     validation_loader = torch.utils.data.DataLoader(
         solar_dataset, batch_size=cf.model.batch_size, sampler=valid_sampler
     )
     test_loader = torch.utils.data.DataLoader(solar_dataset, batch_size=cf.model.batch_size, sampler=test_sampler)
-    return (train_loader, validation_loader, test_loader)
+    return (train_loader, validation_loader, test_loader, solar_dataset)
 
 
 def generate_scenarios(
@@ -641,7 +642,7 @@ def generate_scenarios(
     cf = ConfigSettings(config_path="config.ini")
     params = []
     for frequency in frequencies:
-        (train_loader, validation_loader, test_loader) = generate_loaders(cf, frequency)
+        (train_loader, validation_loader, test_loader, _) = generate_loaders(cf, frequency)
 
         for num_layer in layers:
             for num_head in heads:
