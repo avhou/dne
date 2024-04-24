@@ -130,7 +130,8 @@ All code and data is available in a github repository [@github].  All deep learn
 - `building_blocks.py` contains all pytorch modules and models, the different attention mechanism, input embedding and other support code to execute different scenarios.
 - `datasets.py` contains the code to load and aggregate the Elia data into one pytorch dataloader.
 - `figures.ipynb` is a jupyter notebook that contains code to generate figures.
-- `result-statistics.ipynb` is a jupyter notebook that contains code to check statistical validity and generate figures.
+- `result-statistics.ipynb` is a jupyter notebook that contains code to check statistical validity and generate figures for RQ1.
+- `elia_predictions_vs_timeseries_transformer.ipynb` is a jupyter notebook that contains code to check statistical validity and generate figures for RQ2.
 - `stats.ipynb` is a jupyter notebook that contains code generate tables about statistics.
 - `scenario-runner.ipynb` is a jupyter notebook focusing on the execution of scenarios.  In this notebook, model and scenario parameters are created, models are instantiated, trained, validated and finally tested against the test set.  All results (losses and model weights) are saved to disk for later processing (statistics and figure generation).
 
@@ -152,7 +153,7 @@ As discussed in [the design elaboration](#sec:design-elaboration), we evaluated 
 
 Table: Used hyperparameters \label{table:used-hyperparameters}
 
-In order to evaluate the first research question, we formulate the following H~0~ hypothesis : 
+In order to evaluate the first research question, we formulated the following H~0~ hypothesis : 
 
 > **H~0~ : The performances of the four attention mechanisms (AM-1, AM-2, AM-3, AM-4) are equal.**
 
@@ -160,9 +161,9 @@ To validate whether the performances of the attention mechanisms are equal, we w
 
 ### Evaluation of RQ 2
 
-In order to evaluate the second research question, we formulate the following H~0~ hypothesis : 
+Given the good results of AM-4 for RQ1, we wanted to investigate whether AM-4 would be as good as the Elia model.  In order to evaluate the second research question, we formulated the following H~0~ hypothesis : 
 
-> **H~0~ : The performances of the four attention mechanism (AM-1, AM-2, AM-3, AM-4) are equal to the performance of the Elia model.**
+> **H~0~ : The performance of the fourier attention mechanism (AM-4) is equal to the performance of the Elia model.**
 
 If the p-value is below $\alpha$ = 0.05, we can reject H~0~ and accept the alternative hypothesis, that there is indeed a difference between the performance of the transformer based predictions and the Elia predictions.  Note that Elia provides no details on their prediction model, so this is in fact a comparison between the Elia prediction model and a transformer based prediction model.
 
@@ -210,7 +211,7 @@ The test loss mean and standard deviation values are given in Table \ref{table:t
 
 Table: Test losses for the attention mechanisms \label{table:test-losses}
 
-To get an indication about where attention is focused, we visualised the attention focus for a random input sequence for each of the different attention mechanisms.  Figure @{fig:attention-am-1} illustrates this for AM-1, Figure @{fig:attention-am-2} illustrates this for AM-2, Figure @{fig:attention-am-3} illustrates this for AM-3.
+To get an indication about where attention is focused, we visualised the attention focus for a random input sequence for each of the different attention mechanisms.  Figure @{fig:attention-am-1} illustrates this for AM-1, Figure @{fig:attention-am-2} illustrates this for AM-2, Figure @{fig:attention-am-3} illustrates this for AM-3 and Figure @{fig:attention-am-4} illustrates this for AM-4.
 
 ![Attention visualisation for AM-1](figures/attention-am-1.png){#fig:attention-am-1}
 
@@ -218,12 +219,19 @@ To get an indication about where attention is focused, we visualised the attenti
 
 ![Attention visualisation for AM-3](figures/attention-am-3.png){#fig:attention-am-3}
 
-TODO TODO AM-4
+![Attention visualisation for AM-4](figures/attention-am-4.png){#fig:attention-am-4}
 
 ### Results of RQ 2
 
-TODO resultaten beschrijven
+We compared 150 forecasted values of the fourier model to 150 forecasted values of the Elia model. A shapiro test was done to check normality for both fourier and Elia residuals.   Neither seemed to be normally distributed, indicating a non-parametric test should be used.  A Wilcoxon signed-rank yielded a test value of $2990699$ and a p-value $< 0.0001$, indicating the H~0~ hypothesis should be rejected and we can conclude that the performance of the fourier model is not equal to the performance of the Elia model.  This is obvious when looking at Figure @{fig:forecasts_vs_actuals}.  The Elia model shows predicted values very close to actual values, whereas the fourier model shows larger gaps between actuals and predictions.  A Cohen's d value of $0.7080$ confirms the effect size is large.
 
+![Performance of AM-4 vs performance of Elia](figures/forecasts_vs_actuals.png){#fig:forecasts_vs_actuals}
+
+Plotting (partial) autocorrelation functions for both fourier (Figure @{fig:pacf-fourier}) and Elia (Figure @{fig:pacf-elia}) residuals supports the same conclusion : the Elia model has better performance on this particular dataset.
+
+![(P)ACF of AM-4](figures/pacf_fourier.png){#fig:pacf-fourier}
+
+![(P)ACF of Elia](figures/pacf_elia.png){#fig:pacf-elia}
 
 # Conclusions and Discussion
 
@@ -233,7 +241,7 @@ In evaluating the different attention mechanisms, we implemented a modular and c
 
 Comparing the forecast of the transformer based models to the forecast of Elia did not yield good results.  The predictive model of Elia (no details are published about this model) is clearly better than our transformer based approach.  We can only speculate about the cause of this, but we must mention **(i)** our limited computational resources and number of epochs trained, **(ii)** our fixed set of hyperparameters due to these constraints and **(iii)** the maturity of the Elia model.
 
-We see several possibilities for future work.  First, we have only evaluated the different attention mechanism on one type of dataset (solar power measurements).  This used dataset contained highly regular, cyclical data.  It would be interesting to see whether the same results can be obtained on other types of (less regular) timeseries data like stock market prizes.  Second,  given that **(i)** the fourier input encoding seemed to very efficient in our tests and **(ii)** this input encoding can be used in established transformer architectures, it would be interesting to see if there are benefits in using fourier input encoding in established transformer architectures.
+We see several opportunities for future work.  First, we have only evaluated the different attention mechanism on one type of dataset (solar power measurements).  This used dataset contained highly regular, cyclical data.  It would be interesting to see whether the same results can be obtained on other types of (less regular) timeseries data like stock market prizes.  Second,  given that **(i)** the fourier input encoding seemed to be very efficient in our tests and **(ii)** this input encoding can be used in established transformer architectures, it would be interesting to see if there are benefits in using fourier input encoding in established transformer architectures.
 
 # References
 
