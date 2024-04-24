@@ -40,32 +40,33 @@ To start off, we will look at the characteristics of the dataset used and discus
 
 ## Dataset description {#sec:dataset}
 
-We use data from Elia [@elia], which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast datasets.  These contain time series of actual measured power in megawatt (MW), and also  day+1 and day+7 predictions of solar power output in MW.  Data is available in monthly datasets for the period of February 2013 to February 2024.  Measurements and predictions are recorded every quarter of an hour.  The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points in Table \ref{table:features}.
+We use data from Elia [@elia], which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast dataset, which contains measurements of solar power in megawatt (MW) for every 15 minutes starting from February 2013 to February 2024, alongside with next-day and next-week predictions.  The measured value is the running average of the amount of power during these 15 minutes.  The layout of the dataset is fully described here [@dataset].  We recap the most important points in Table \ref{table:features}.
 
-| feature          | description                           | range                            |
-|:-----------------|:--------------------------------------|:---------------------------------|
-| DateTime         | Date and time per quarter hour        | [00:00 - 24:00] in quarter hours |
-| Measurement      | Measured solar power production in MW | [0.0 - 6000.0]                   |
-| Day+1 prediction | D+1 solar power forecast in MW        | [0.0 - 6000.0]                   |
-| Day+7 prediction | D+7 solar power forecast in MW        | [0.0 - 6000.0]                   |
+| feature              | description                           | range                            |
+|:---------------------|:--------------------------------------|:---------------------------------|
+| DateTime             | Date and time per 15 minutes          | [00:00 - 24:00]                  |
+| Measurement          | Measured solar power production in MW | [0.0 - 6000.0]                   |
+| Next-day prediction  | Next-day solar power forecast in MW   | [0.0 - 6000.0]                   |
+| Next-week prediction | Next-week solar power forecast in MW  | [0.0 - 6000.0]                   |
 
-Table:  Features captured per quarter-hour in @dataset \label{table:features}
+Table:  Features captured per 15 minutes in @dataset \label{table:features}
 
 ## Data general properties
 
-Data is not normally distributed but highly regular and contains obvious day - night recurring patterns.  Since we are using solar power production data, data typically shows no values in the early morning, building towards a peak around noon, and then slowly reducing values towards the evening.  This is illustrated in Figure @{fig:recurrent-pattern-september}.
+The target column is not normally distributed but highly regular and characterized by a distinct day-night recurring pattern, where a local minimum occurs at night and a local maximum occurs during the day. This is illustrated in Figure @{fig:recurrent-pattern-september}.
 
-There are obvious differences in solar power generation between summer months and winter months, but the general pattern remains the same, as illustrated in Figure @{fig:recurrent-pattern-january}.
+Furthermore there are obvious differences in solar power generation between summer months and winter months, but the general pattern remains the same, as illustrated in Figure @{fig:recurrent-pattern-january}.
 
 ## Data pre-processing
 
-The Elia data [@dataset] is very fine grained and contains $24*4=96$ measurements per day, resulting in $30*24*4=2880$ measurements for a 30 day month.  In order to be able to limit memory and computational resources, we have added the possibility to aggregate this dataset.  Possible choices are **(i)** no aggregation, **(ii)** hourly aggregation, **(iii)** aggregation every 4 hours (starting from 00:00, resulting in 6 values per day), and finally **(iv)** aggregation per day.  Aggregation is done by averaging the values in the selected timeframe.
+The Elia data [@dataset] is very fine grained and contains 96 measurements per day, resulting in around 2880 measurements per month. In order to deal with our limited computational resources, we have added the possibility to aggregate this dataset.  Possible choices are **(i)** no aggregation, **(ii)** hourly aggregation, **(iii)** 4-hourly aggregation, and finally **(iv)** aggregation per day.  Aggregation is done by averaging the values in the selected timeframe.
 
-Elia provides a lot of historical data, going from February of 2013 to February of 2024.  All data were taken into account, in order to maximize the possibility of finding interesting patterns in the data.  Input length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic complexity in $L$.  Taking too few measurements into acount, it will be difficult to spot similar events in the past.  Taking too many measurements into account, it will be prohibitely expensive in terms of memory and computational resources to train and evaluate the model.  The model implemented allowed for easy selection of input length $L$.  This is related to the level of aggregations in terms of how many hours or days this represents, i.e. when using hourly aggregation and taking 24 input measurements, we are looking at the data of exactly one day.
-
+All data starting from February 2013 was taken into account, in order to maximize the possibility of finding interesting patterns in the data.  The sequence length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic time complexity.  With too few measurements, it will be difficult to spot similar events in the past. On the other hand too many measurements would make it impossible to train and evaluate the model due to the transformers quadratic nature and our limited computational resources.  A sequence length of 24 in combination with hourly aggregation would result in every sequence containing the information of one full day.
 ### Outlier analysis {#sec:outlier}
 
 A visual outlier analysis yielded no abnormal or obiously wrong values.  This makes sense, as the data contains actually measured solar power.  Therefore, no values were discarded.
+
+A visual analysis of outliers yielded no abnormal or obviously erroneous values. This outcome was expected and thus no values were discarded.
 
 # Methodology and Implementation
 
