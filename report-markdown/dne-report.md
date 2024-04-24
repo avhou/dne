@@ -20,21 +20,21 @@ For this assignment, we explore different attention mechanisms for time-series-b
 
 Multiple kinds of attention mechanisms exist for transformer-based time-series forecasting.  Convolutional self-attention is introduced in [@paper], which aims to capture the local context of input events, but does this using a symmetric convolution, thereby taking both input data leading to a particular event and the outcome of that event into account.  A dual-stage attention mechanism is used for a Recurrent Neural Network (RNN) architecture in [@dualstage], using an input attention mechanism in an encoder step, and a temporal attention mechanism in a decoder step.
 
-Even though transformers were originally designed in the field of Natural Language Processing (NLP), a lot of work has been done to use transformers with time series data. An overview of the different approaches can be found in [@timeseries1].  Tashreef et al. introduce a transformer-based approach using the time2vec encoding mechanism [@timeseries2]. The authors of this paper use transformer models to predict stock prices, and claim these models can be used both for short and long term predictions. Finally the effectiveness of using a transformers-based approach to forecast time series data is tested in [@timeseries3].
+Even though transformers were originally designed in the field of Natural Language Processing (NLP), a lot of work has been done to use transformers with time series data. An overview of the different approaches can be found in [@timeseries1].  Tashreef et al. introduced a transformer-based approach using the time2vec encoding mechanism [@timeseries2]. The authors of this paper use transformer models to predict stock prices, and claim these models can be used both for short and long term predictions. Finally the effectiveness of using a transformers-based approach to forecast time series data is tested in [@timeseries3].
 
 The original transformer architecture introduces a quadratic time and space complexity $O(L^2)$.  Much work has been done to overcome this memory bottleneck.  A novel LogSparse transformer architecture is introduced in [@paper], which reduces the memory cost to $O(L {(\log {}L)}^2)$.  The informer model [@informer] even achieves a time complexity of $O(L {\log {}L)}$.  In this report we will soley focus on attention mechanisms in the context of time series forecasting, ignoring the space and time complexity bottleneck of the transformer algorithm.
 
 # Goal
 
-In this paper, we focus on using transformers for time series forecasting. We aim to compare different attention mechanism to determine which mechanism best captures the outcome of past events.  We formulate a first research question : 
+In this paper, we focus on time-series forecasting using transformer-based approaches. We introduce one novel attention mechanism using Fourier analysis and aim to compare it to different existing attention mechanisms in order to determine which attention mechanism performs best in capturing the outcome of past events.  We formulate a first research question: 
 
-> **RQ 1 : When comparing regular self-attention, convoluted self-attention, right-padded convoluted self-attention and fourier transform based self-attention, which mechanism best predicts future values using root mean square error (RMSE) as metric?**
+> **RQ 1 : When comparing regular self-attention, convoluted self-attention, right-padded convoluted self-attention and fast-fourier-transform-based self-attention, which mechanism best predicts future values using root mean square error (RMSE) as metric?**
 
-The Elia dataset used is fully described in [the dataset description section](#sec:dataset).  It not only contains time series data, but also next-day and next-week predictions of the same data.  We formulate a second research question : 
+We used the Elia dataset for our experiments, the dataset is fully described in [the dataset description section](#sec:dataset).  In addition to the time series data, it includes predictions for both the next day and the next week. Consequently we formulate a second research question: 
 
 > **RQ 2 : Is the RMSE of a transformer model better than the Elia prediction model?**
 
-Firstly, this report will look at the characteristics of the dataset used and discuss pre-processing steps.  Then, we will consider several attention mechanisms,  discuss design and implementation details and finally evaluate the performance of these attention mechanisms on the dataset.
+To start off, we will look at the characteristics of the dataset used and discuss pre-processing steps.  Then, we will consider several attention mechanisms, discuss design and implementation details and finally evaluate the performance of these attention mechanisms on the dataset.
 
 # Data analysis
 
