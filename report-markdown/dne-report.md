@@ -149,6 +149,8 @@ As discussed in [the design elaboration](#sec:design-elaboration), we evaluated 
 
 Table: Used hyperparameters \label{table:used-hyperparameters}
 
+As can be seen in (Figure @{fig:validation_loss_comparison}) the fast-fourier-transform attention mechanism showed the best performance during validation. 
+
 In order to evaluate the first research question, we formulated the following H~0~ hypothesis : 
 
 > **H~0~ : The performances of the four attention mechanisms (AM-1, AM-2, AM-3, AM-4) are equal.**
@@ -231,13 +233,13 @@ Plotting (partial) autocorrelation functions for both fourier (Figure @{fig:pacf
 
 # Conclusions and Discussion
 
-In this paper, we analysed the role of attention mechanisms in transformer models for forecasting values of timeseries data.  Several attention mechanisms were evaluated, **(i)** regular self-attention, **(ii)** convoluted self-attention, **(iii)** right padded convoluted self-attention and **(iv)** fourier transform based self-attention.  Input data of Elia, the Belgian electricity transmission network operator, was aggregated to daily values and our models generated a day+1 forecast.  First, we did a mutual comparison of the different attention mechanisms.  Second, we compared the day+1 forecast of our transformer models with the (proprietary) day+1 forecast of Elia.
+In this paper, we analysed the role of attention mechanisms in transformer models for forecasting values of timeseries data.  Several attention mechanisms were evaluated, **(i)** regular self-attention, **(ii)** convoluted self-attention, **(iii)** right padded convoluted self-attention and **(iv)** fast-fourier-transform self-attention.  Input data of Elia, the Belgian electricity transmission network operator, was aggregated to daily values and our models generated a next-day forecast.  First, we did a mutual comparison of the different attention mechanisms.  Second, we compared the next-day forecast of our transformer models with the (proprietary) next-day forecast of Elia.
 
-In evaluating the different attention mechanisms, we implemented a modular and composable base transformer architecture.  This allowed us to only vary the input encodings for each attention mechanism, leaving the rest of the architecture unchanged.  The fourier based input encoding clearly yields the best results in our test setup, outperforming causal convolution 5 times.
+In evaluating the different attention mechanisms, we implemented a modular and composable base transformer architecture.  This allowed us to only vary the input encodings for each attention mechanism, leaving the rest of the architecture unchanged.  The fourier based input encoding clearly yields the best results in our test setup, outperforming causal convolution 5 times. 
 
 Comparing the forecast of the transformer based models to the forecast of Elia did not yield good results.  The predictive model of Elia (no details are published about this model) is clearly better than our transformer based approach.  We can only speculate about the cause of this, but we must mention **(i)** our limited computational resources and number of epochs trained, **(ii)** our fixed set of hyperparameters due to these constraints and **(iii)** the maturity of the Elia model.
 
-We see several opportunities for future work.  First, we have only evaluated the different attention mechanism on one type of dataset (solar power measurements).  This used dataset contained highly regular, cyclical data.  It would be interesting to see whether the same results can be obtained on other types of (less regular) timeseries data like stock market prizes.  Second,  given that **(i)** the fourier input encoding seemed to be very efficient in our tests and **(ii)** this input encoding can be used in established transformer architectures, it would be interesting to see if there are benefits in using fourier input encoding in established transformer architectures.
+We see several opportunities for future work.  First, we have only evaluated the different attention mechanism on one type of dataset (solar power measurements).  This used dataset contained highly regular, cyclical data.  It would be interesting to see whether the same results can be obtained on other types of (less regular) timeseries data like stock market prizes.  Second,  given that **(i)** the fourier input encoding seemed to be very efficient in our tests and **(ii)** this input encoding can be used in established transformer architectures, it would be interesting to see if there are benefits in using fourier input encoding in established transformer architectures. For example we could use a renowned Timeseries Transformer model sourced from Huggingface and test it's performance on a prediction task with vs without performing a FFT on the input embeddings.
 
 # References
 
