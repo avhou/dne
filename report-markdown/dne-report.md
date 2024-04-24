@@ -26,9 +26,9 @@ The original transformer architecture introduces a quadratic time and space comp
 
 # Goal
 
-In this paper, we focus on time-series forecasting using transformer-based approaches. We introduce one novel attention mechanism using Fourier analysis and aim to compare it to different existing attention mechanisms in order to determine which attention mechanism performs best in capturing the outcome of past events.  We formulate a first research question: 
+In this paper, we focus on time-series forecasting using transformer-based approaches.  We aim to compare different attention mechanism and determine which mechanism best captures the outcome of past events. We formulate a first research question: 
 
-> **RQ 1 : When comparing regular self-attention, convoluted self-attention, right-padded convoluted self-attention and fast-fourier-transform-based self-attention, which mechanism best predicts future values using root mean square error (RMSE) as metric?**
+> **RQ 1 : When comparing the different attention mechanisms, which mechanism best predicts future values using root mean square error (RMSE) as metric?**
 
 We used the Elia dataset for our experiments, the dataset is fully described in [the dataset description section](#sec:dataset).  In addition to the time series data, it includes predictions for both the next day and the next week. Consequently we formulate a second research question: 
 
@@ -71,14 +71,10 @@ A visual analysis of outliers yielded no abnormal or obviously erroneous values.
 # Methodology and Implementation
 
 ## Research methodology
+Given a basic transformer architecture, we implemented a number of attention mechanisms. Because of our limited computational resources, it was not possible to perform an automated hyperparameter sweep such as GridSearch or RandomizedSearch. Therefor we started with manually evaluating the different models by varying some hyperparameters (see Table \ref{table:hyperparameters}). The optimal set of hyperparameter and aggregation values was then used for the rest of the experiments.
 
-We started by examining the dataset [@dataset]. Outlier analysis yielded no results, and we performed a number of standard checks on the quality of the data and decided not to exclude any data from the dataset.  
+The data from up to 2020 was used for training. The period from 2020 up untill 2021 was used for validation, and finally the test-set contained all data starting from 2021. All input data was scaled using a `MinMaxScaler` to normalize the values to $[0, 1]$. Models were first trained on the training dataset and then validated on the validation dataset for a maximum of 100 epochs. An early stop was forced if the average validation error of the running epoch exceeded the minimum average validation error 5 consecutive times, as this indicates the validation error was no longer decreasing. Each model was then tested on the test-set and all losses (training losses, validation losses and test losses) were kept for later analysis. In all cases, RMSE was used as the loss metric. 
 
-Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate influence on prediction RMSE.  We first evaluated different models by varying some hyperparameters and by varying data aggregation (see Table \ref{table:hyperparameters}).  Given our limited computational resources, we chose a fixed set of hyperparameter and aggregation values for the rest of the experiments.  All experiments used a forecast size of 1.  Note that this is linked to the aggregation level, i.e. when using ``1 day'' aggregation, forecasting one value means forecasting the next day.  When using 1h aggregation, forecasting one value means forecasting the next hour.
-
-Data was split in a training part (63 %), a validation part (10 %), and a test part (27 %).  To accomplish this split, all data was sorted chronologically.  All data up to but not including 2020 served as training data, the data of 2020 up to but not including 2021 served as validation data, and data of 2021 and later served as test data.  All input data was scaled using a `MinMaxScaler` to scale the values to the range of [0, 1].  Models were first trained on the training dataset and then validated on the validation dataset for a maximum of 100 epochs.  To limit computation we kept track of the minimum average validation error across all epochs.  An early stop was forced if the average validation error of the running epoch exceeded the minimum average validation error 5 consecutive times, as this indicates the validation error was no longer decreasing.  Each model was then tested on the testing set and all losses (training losses, validation losses and test losses) were kept for later analysis.   In all cases, RMSE was used as the loss metric.  
-
-In order to compare the prediction of the trained transformer models to the Elia predictions, we kept the Elia predictions in the test set as an additional feature.  This feature was not used for training or validation.  Elia predictions are done per quarter hour, and were aggregated using averaging where necessary to obtain the same aggregation as the input data.
 
 ## Design elaboration {#sec:design-elaboration}
 
@@ -87,7 +83,7 @@ We decided to implement and evaluate the following attention mechanisms (Table \
 - regular self-attention (AM-1).  This is the mechanism described in the original transformer paper [@transformer].
 - convoluted self-attention as described in [@paper] (AM-2).  This mechanism generalizes the regular self-attention mechanism and uses a 1D convolution to transform the Query (Q) and Key (K) values before using them in the transformer architecture.
 - right padded convoluted self-attention (AM-3).  This is a variation of the mechanism described in [@paper].  Whereas [@paper] uses a symmetric convolution, here we use a convolution that focuses on the right hand side to transform Q and K values before using them in the transformer architecture.  Padding to the right is done to prevent looking at future values.  The intuition behind this mechanism is that it could look more at the outcome of past events than regular convoluted self-attention.
-- fourier transform based self-attention (AM-4).  This uses the fourier transform to decompose the input embedding in a vector of frequency values.  These vectors are used as a measure of similarity between keys and values to determine where to direct attention.
+- Fast fourier transform based self-attention (AM-4). The input sequence can be seen as a periodic function. Our novel approach will first transform the periodic function from the time domain into the frequency domain using a FFT (Fast fourier transform). We do this in order to capture the frequencies the function is made up from. The intuïtion behind this is that during the self-attention 2 vectors will be similar if they can be decomposed into similar sine and cosine functions, which would mean their shape is similar.
 
 
 | attention mechanism                    | abbreviation |
@@ -95,7 +91,7 @@ We decided to implement and evaluate the following attention mechanisms (Table \
 | regular self-attention                 | AM-1         |
 | convoluted self-attention              | AM-2         |
 | right padded convoluted self-attention | AM-3         |
-| fourier transform self-attention       | AM-4         |
+| fast-fourier-transform self-attention  | AM-4         |
 
 Table:  Attention mechanisms \label{table:attention-mechanisms}
 
@@ -121,7 +117,7 @@ The implemented early stopping mechanism was activated at different epochs for t
 
 Table:  Number of epochs trained \label{table:early-stopping}
 
-Feature embedding was done using a combination of both positional encoding and a more specific temporal encoding, taking into account hour of the day, day of the week, day of the month and month of the year of the data.  The temporal encoding was added to the input vector and served as an additional clue for the transformer model to link similar events.
+Feature embedding was done using a combination of both positional encoding and a more specific temporal encoding, taking into account hour of the day, day of the week, day of the month and month of the year of the data. This temporal encoding could be learned by the network in the same way as the informer model [@informer] . The temporal encoding was added to the input vector and served as global context for the transformer model.
 
 ## Implementation
 
