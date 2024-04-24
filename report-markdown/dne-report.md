@@ -16,68 +16,65 @@ papersize: a4
 
 This report details the steps taken by Arne Lescrauwaet (852617312), Joachim Verschelde (852594432) and Alexander Van Hecke (852631385) for the second assignment of the 2023 Deep Neural Engineering course organised by the Open University [@dne].
 
-For this assignment we look at different attention mechanisms in transformers [@transformer] for use with time series data.  The attention mechanism enables a transformer model to selectively focus on relevant parts of the input data.  The goal is to be able to capture long range dependencies and relationships between items of the input data.  This is particularly important for time series data containing recurring patterns, e.g. hourly traffic counts on busy highways and hourly power consumption of nations.  We expect these types of data to contain clear and recurring patterns (i.e. traffic will typically be lower during weekends) and we want an attention mechanism to capture these patterns.  In addition to capturing recurring patterns, we would also like to be able to capture the ``local context'' of a pattern to predict new values.  That is, when encountering an event that is similar to a past event, we want to take the outcome of that past event into account in our prediction.
+For this assignment, we explore different attention mechanisms for time-series-based transformers [@transformer]. The attention mechanism allows a transformer model to selectively focus on relevant parts of the input data, capturing long-range dependencies and relationships between items. This is particularly important for time series data that contains recurring patterns, such as hourly traffic counts or hourly power consumption. By capturing the "local context" of recurring patterns, we can use this information to forecast future events. Specifically, when encountering an event similar to a past event, we consider the outcome of that past event in our prediction.
 
-Different kinds of attention mechanisms exist.  Convolutional self-attention is introduced in [@paper], which aims to capture the local context of input events, but does this using a symmetric convolution, thereby taking both input data leading to a particular event and the outcome of that event into account.  A dual-stage attention mechanism is used for a Recurrent Neural Network (RNN) architecture in [@dualstage], using an input attention mechanism in an encoder step, and a temporal attention mechanism in a decoder step.
+Multiple kinds of attention mechanisms exist for transformer-based time-series forecasting.  Convolutional self-attention is introduced in [@paper], which aims to capture the local context of input events, but does this using a symmetric convolution, thereby taking both input data leading to a particular event and the outcome of that event into account.  A dual-stage attention mechanism is used for a Recurrent Neural Network (RNN) architecture in [@dualstage], using an input attention mechanism in an encoder step, and a temporal attention mechanism in a decoder step.
 
-Even though transformers were originally designed in the field of natural language processing (NLP), a lot of work has been done to use transformers with time series data.  An overview of different ways to adapt transformers to time series data is given in [@timeseries1].  The time2vec encoding mechanism is introduced in [@timeseries2].  The authors of this paper use transformer models to predict stock prices, and claim these models can be used both for short and long term predictions.  The effectiveness of applying transformers to time series data is tested in [@timeseries3].
+Even though transformers were originally designed in the field of Natural Language Processing (NLP), a lot of work has been done to use transformers with time series data. An overview of the different approaches can be found in [@timeseries1].  Tashreef et al. introduced a transformer-based approach using the time2vec encoding mechanism [@timeseries2]. The authors of this paper use transformer models to predict stock prices, and claim these models can be used both for short and long term predictions. Finally the effectiveness of using a transformers-based approach to forecast time series data is tested in [@timeseries3].
 
-The original transformer architecture introduces a quadratic time and space complexity.  Much work has been done to improve on this.  The LogSparse transformer is introduced in [@paper], which reduces the memory cost to $O(L {(\log {}L)}^2)$.  The informer model [@informer] even achieves $O(L {\log {}L)}$ memory complexity.  In this report we will focus on attention mechanisms in the context of time series forecasting, ignoring space and time complexity of the transformer algorithm.
+The original transformer architecture introduces a quadratic time and space complexity $O(L^2)$.  Much work has been done to overcome this memory bottleneck.  A novel LogSparse transformer architecture is introduced in [@paper], which reduces the memory cost to $O(L {(\log {}L)}^2)$.  The informer model [@informer] even achieves a time complexity of $O(L {\log {}L)}$.  In this report we will soley focus on attention mechanisms in the context of time series forecasting, ignoring the space and time complexity bottleneck of the transformer algorithm.
 
 # Goal
 
-In this paper, we focus on using transformers for time series forecasting. We aim to compare different attention mechanism and determine which mechanism best captures the outcome of past events.  We formulate a first research question : 
+In this paper, we focus on time-series forecasting using transformer-based approaches.  We aim to compare different attention mechanism and determine which mechanism best captures the outcome of past events. We formulate a first research question: 
 
-> **RQ 1 : When comparing regular self-attention, convoluted self-attention, right-padded convoluted self-attention and fourier transform based self-attention, which mechanism best predicts future values using root mean square error (RMSE) as metric?**
+> **RQ 1 : When comparing the different attention mechanisms, which mechanism best predicts future values using root mean square error (RMSE) as metric?**
 
-The Elia dataset used is fully described in [the dataset description section](#sec:dataset).  It not only contains time series data, but also day+1 and day+7 predictions of the same data.  We formulate a second research question : 
+We used the Elia dataset for our experiments, the dataset is fully described in [the dataset description section](#sec:dataset).  In addition to the time series data, it includes predictions for both the next day and the next week. Consequently we formulate a second research question: 
 
 > **RQ 2 : Is the RMSE of a transformer model better than the Elia prediction model?**
 
-Firstly, this report will look at the characteristics of the dataset used and discuss pre-processing steps.  Then, we will consider several attention mechanisms,  discuss design and implementation details and finally evaluate the performance of these attention mechanisms on the dataset.
+To start off, we will look at the characteristics of the dataset used and discuss pre-processing steps.  Then, we will consider several attention mechanisms, discuss design and implementation details and finally evaluate the performance of these attention mechanisms on the dataset.
 
 # Data analysis
 
 ## Dataset description {#sec:dataset}
 
-We use data from Elia [@elia], which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast datasets.  These contain time series of actual measured power in megawatt (MW), and also  day+1 and day+7 predictions of solar power output in MW.  Data is available in monthly datasets for the period of February 2013 to February 2024.  Measurements and predictions are recorded every quarter of an hour.  The measured value is always the amount of power equivalent to the running average measured for that particular quarter-hour.  The layout of the dataset is fully described here [@dataset].  We recap the most important points in Table \ref{table:features}.
+We use data from Elia [@elia], which operates the electricity transmission network in Belgium.  In particular, we use the solar power forecast dataset, which contains measurements of solar power in megawatt (MW) for every 15 minutes starting from February 2013 to February 2024, alongside with next-day and next-week predictions.  The measured value is the running average of the amount of power during these 15 minutes.  The layout of the dataset is fully described here [@dataset].  We recap the most important points in Table \ref{table:features}.
 
-| feature          | description                           | range                            |
-|:-----------------|:--------------------------------------|:---------------------------------|
-| DateTime         | Date and time per quarter hour        | [00:00 - 24:00] in quarter hours |
-| Measurement      | Measured solar power production in MW | [0.0 - 6000.0]                   |
-| Day+1 prediction | D+1 solar power forecast in MW        | [0.0 - 6000.0]                   |
-| Day+7 prediction | D+7 solar power forecast in MW        | [0.0 - 6000.0]                   |
+| feature              | description                           | range                            |
+|:---------------------|:--------------------------------------|:---------------------------------|
+| DateTime             | Date and time per 15 minutes          | [00:00 - 24:00]                  |
+| Measurement          | Measured solar power production in MW | [0.0 - 6000.0]                   |
+| Next-day prediction  | Next-day solar power forecast in MW   | [0.0 - 6000.0]                   |
+| Next-week prediction | Next-week solar power forecast in MW  | [0.0 - 6000.0]                   |
 
-Table:  Features captured per quarter-hour in @dataset \label{table:features}
+Table:  Features captured per 15 minutes in @dataset \label{table:features}
 
 ## Data general properties
 
-Data is not normally distributed but highly regular and contains obvious day - night recurring patterns.  Since we are using solar power production data, data typically shows no values in the early morning, building towards a peak around noon, and then slowly reducing values towards the evening.  This is illustrated in Figure @{fig:recurrent-pattern-september}.
+The target column is not normally distributed but highly regular and characterized by a distinct day-night recurring pattern, where a local minimum occurs at night and a local maximum occurs during the day. This is illustrated in Figure @{fig:recurrent-pattern-september}.
 
-There are obvious differences in solar power generation between summer months and winter months, but the general pattern remains the same, as illustrated in Figure @{fig:recurrent-pattern-january}.
+Furthermore there are obvious differences in solar power generation between summer months and winter months, but the general pattern remains the same, as illustrated in Figure @{fig:recurrent-pattern-january}.
 
 ## Data pre-processing
 
-The Elia data [@dataset] is very fine grained and contains $24*4=96$ measurements per day, resulting in $30*24*4=2880$ measurements for a 30 day month.  In order to be able to limit memory and computational resources, we have added the possibility to aggregate this dataset.  Possible choices are **(i)** no aggregation, **(ii)** hourly aggregation, **(iii)** aggregation every 4 hours (starting from 00:00, resulting in 6 values per day), and finally **(iv)** aggregation per day.  Aggregation is done by averaging the values in the selected timeframe.
+The Elia data [@dataset] is very fine grained and contains 96 measurements per day, resulting in around 2880 measurements per month. In order to deal with our limited computational resources, we have added the possibility to aggregate this dataset.  Possible choices are **(i)** no aggregation, **(ii)** hourly aggregation, **(iii)** 4-hourly aggregation, and finally **(iv)** aggregation per day.  Aggregation is done by averaging the values in the selected timeframe.
 
-Elia provides a lot of historical data, going from February of 2013 to February of 2024.  All data were taken into account, in order to maximize the possibility of finding interesting patterns in the data.  Input length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic complexity in $L$.  Taking too few measurements into acount, it will be difficult to spot similar events in the past.  Taking too many measurements into account, it will be prohibitely expensive in terms of memory and computational resources to train and evaluate the model.  The model implemented allowed for easy selection of input length $L$.  This is related to the level of aggregations in terms of how many hours or days this represents, i.e. when using hourly aggregation and taking 24 input measurements, we are looking at the data of exactly one day.
-
+All data starting from February 2013 was taken into account, in order to maximize the possibility of finding interesting patterns in the data.  The sequence length $L$ has to be chosen carefully in basic transformer architectures because of the quadratic time complexity.  With too few measurements, it will be difficult to spot similar events in the past. On the other hand too many measurements would make it impossible to train and evaluate the model due to the transformers quadratic nature and our limited computational resources.  A sequence length of 24 in combination with hourly aggregation would result in every sequence containing the information of one full day.
 ### Outlier analysis {#sec:outlier}
 
 A visual outlier analysis yielded no abnormal or obiously wrong values.  This makes sense, as the data contains actually measured solar power.  Therefore, no values were discarded.
 
+A visual analysis of outliers yielded no abnormal or obviously erroneous values. This outcome was expected and thus no values were discarded.
+
 # Methodology and Implementation
 
 ## Research methodology
+Given a basic transformer architecture, we implemented a number of attention mechanisms. Because of our limited computational resources, it was not possible to perform an automated hyperparameter sweep such as GridSearch or RandomizedSearch. Therefor we started with manually evaluating the different models by varying some hyperparameters (see Table \ref{table:hyperparameters}). The optimal set of hyperparameter and aggregation values was then used for the rest of the experiments.
 
-We started by examining the dataset [@dataset]. Outlier analysis yielded no results, and we performed a number of standard checks on the quality of the data and decided not to exclude any data from the dataset.  
+The data from up to 2020 was used for training. The period from 2020 up untill 2021 was used for validation, and finally the test-set contained all data starting from 2021. All input data was scaled using a `MinMaxScaler` to normalize the values to $[0, 1]$. Models were first trained on the training dataset and then validated on the validation dataset for a maximum of 100 epochs. An early stop was forced if the average validation error of the running epoch exceeded the minimum average validation error 5 consecutive times, as this indicates the validation error was no longer decreasing. Each model was then tested on the test-set and all losses (training losses, validation losses and test losses) were kept for later analysis. In all cases, RMSE was used as the loss metric. 
 
-Given a basic transformer architecture, we implemented a number of attention mechanisms to investigate influence on prediction RMSE.  We first evaluated different models by varying some hyperparameters and by varying data aggregation (see Table \ref{table:hyperparameters}).  Given our limited computational resources, we chose a fixed set of hyperparameter and aggregation values for the rest of the experiments.  All experiments used a forecast size of 1.  Note that this is linked to the aggregation level, i.e. when using ``1 day'' aggregation, forecasting one value means forecasting the next day.  When using 1h aggregation, forecasting one value means forecasting the next hour.
-
-Data was split in a training part (63 %), a validation part (10 %), and a test part (27 %).  To accomplish this split, all data was sorted chronologically.  All data up to but not including 2020 served as training data, the data of 2020 up to but not including 2021 served as validation data, and data of 2021 and later served as test data.  All input data was scaled using a `MinMaxScaler` to scale the values to the range of [0, 1].  Models were first trained on the training dataset and then validated on the validation dataset for a maximum of 100 epochs.  To limit computation we kept track of the minimum average validation error across all epochs.  An early stop was forced if the average validation error of the running epoch exceeded the minimum average validation error 5 consecutive times, as this indicates the validation error was no longer decreasing.  Each model was then tested on the testing set and all losses (training losses, validation losses and test losses) were kept for later analysis.   In all cases, RMSE was used as the loss metric.  
-
-In order to compare the prediction of the trained transformer models to the Elia predictions, we kept the Elia predictions in the test set as an additional feature.  This feature was not used for training or validation.  Elia predictions are done per quarter hour, and were aggregated using averaging where necessary to obtain the same aggregation as the input data.
 
 ## Design elaboration {#sec:design-elaboration}
 
@@ -86,7 +83,7 @@ We decided to implement and evaluate the following attention mechanisms (Table \
 - regular self-attention (AM-1).  This is the mechanism described in the original transformer paper [@transformer].
 - convoluted self-attention as described in [@paper] (AM-2).  This mechanism generalizes the regular self-attention mechanism and uses a 1D convolution to transform the Query (Q) and Key (K) values before using them in the transformer architecture.
 - right padded convoluted self-attention (AM-3).  This is a variation of the mechanism described in [@paper].  Whereas [@paper] uses a symmetric convolution, here we use a convolution that focuses on the right hand side to transform Q and K values before using them in the transformer architecture.  Padding to the right is done to prevent looking at future values.  The intuition behind this mechanism is that it could look more at the outcome of past events than regular convoluted self-attention.
-- fourier transform based self-attention (AM-4).  This uses the fourier transform to decompose the input embedding in a vector of frequency values.  These vectors are used as a measure of similarity between keys and values to determine where to direct attention.
+- Fast fourier transform based self-attention (AM-4). The input sequence can be seen as a periodic function. Our novel approach will first transform the periodic function from the time domain into the frequency domain using a FFT (Fast fourier transform). We do this in order to capture the frequencies the function is made up from. The intuïtion behind this is that during the self-attention 2 vectors will be similar if they can be decomposed into similar sine and cosine functions, which would mean their shape is similar.
 
 
 | attention mechanism                    | abbreviation |
@@ -94,7 +91,7 @@ We decided to implement and evaluate the following attention mechanisms (Table \
 | regular self-attention                 | AM-1         |
 | convoluted self-attention              | AM-2         |
 | right padded convoluted self-attention | AM-3         |
-| fourier transform self-attention       | AM-4         |
+| fast-fourier-transform self-attention  | AM-4         |
 
 Table:  Attention mechanisms \label{table:attention-mechanisms}
 
@@ -120,7 +117,7 @@ The implemented early stopping mechanism was activated at different epochs for t
 
 Table:  Number of epochs trained \label{table:early-stopping}
 
-Feature embedding was done using a combination of both positional encoding and a more specific temporal encoding, taking into account hour of the day, day of the week, day of the month and month of the year of the data.  The temporal encoding was added to the input vector and served as an additional clue for the transformer model to link similar events.
+Feature embedding was done using a combination of both positional encoding and a more specific temporal encoding, taking into account hour of the day, day of the week, day of the month and month of the year of the data. This temporal encoding could be learned by the network in the same way as the informer model [@informer] . The temporal encoding was added to the input vector and served as global context for the transformer model.
 
 ## Implementation
 
@@ -151,6 +148,8 @@ As discussed in [the design elaboration](#sec:design-elaboration), we evaluated 
 |                AM-4 |      2 |     4 |               256 |         N/A |
 
 Table: Used hyperparameters \label{table:used-hyperparameters}
+
+As can be seen in (Figure @{fig:validation_loss_comparison}) the fast-fourier-transform attention mechanism showed the best performance during validation. 
 
 In order to evaluate the first research question, we formulated the following H~0~ hypothesis : 
 
@@ -234,13 +233,13 @@ Plotting (partial) autocorrelation functions for both fourier (Figure @{fig:pacf
 
 # Conclusions and Discussion
 
-In this paper, we analysed the role of attention mechanisms in transformer models for forecasting values of timeseries data.  Several attention mechanisms were evaluated, **(i)** regular self-attention, **(ii)** convoluted self-attention, **(iii)** right padded convoluted self-attention and **(iv)** fourier transform based self-attention.  Input data of Elia, the Belgian electricity transmission network operator, was aggregated to daily values and our models generated a day+1 forecast.  First, we did a mutual comparison of the different attention mechanisms.  Second, we compared the day+1 forecast of our transformer models with the (proprietary) day+1 forecast of Elia.
+In this paper, we analysed the role of attention mechanisms in transformer models for forecasting values of timeseries data.  Several attention mechanisms were evaluated, **(i)** regular self-attention, **(ii)** convoluted self-attention, **(iii)** right padded convoluted self-attention and **(iv)** fast-fourier-transform self-attention.  Input data of Elia, the Belgian electricity transmission network operator, was aggregated to daily values and our models generated a next-day forecast.  First, we did a mutual comparison of the different attention mechanisms.  Second, we compared the next-day forecast of our transformer models with the (proprietary) next-day forecast of Elia.
 
-In evaluating the different attention mechanisms, we implemented a modular and composable base transformer architecture.  This allowed us to only vary the input encodings for each attention mechanism, leaving the rest of the architecture unchanged.  The fourier based input encoding clearly yields the best results in our test setup, outperforming causal convolution 5 times.
+In evaluating the different attention mechanisms, we implemented a modular and composable base transformer architecture.  This allowed us to only vary the input encodings for each attention mechanism, leaving the rest of the architecture unchanged.  The fourier based input encoding clearly yields the best results in our test setup, outperforming causal convolution 5 times. 
 
 Comparing the forecast of the transformer based models to the forecast of Elia did not yield good results.  The predictive model of Elia (no details are published about this model) is clearly better than our transformer based approach.  We can only speculate about the cause of this, but we must mention **(i)** our limited computational resources and number of epochs trained, **(ii)** our fixed set of hyperparameters due to these constraints and **(iii)** the maturity of the Elia model.
 
-We see several opportunities for future work.  First, we have only evaluated the different attention mechanism on one type of dataset (solar power measurements).  This used dataset contained highly regular, cyclical data.  It would be interesting to see whether the same results can be obtained on other types of (less regular) timeseries data like stock market prizes.  Second,  given that **(i)** the fourier input encoding seemed to be very efficient in our tests and **(ii)** this input encoding can be used in established transformer architectures, it would be interesting to see if there are benefits in using fourier input encoding in established transformer architectures.
+We see several opportunities for future work.  First, we have only evaluated the different attention mechanism on one type of dataset (solar power measurements).  This used dataset contained highly regular, cyclical data.  It would be interesting to see whether the same results can be obtained on other types of (less regular) timeseries data like stock market prizes.  Second,  given that **(i)** the fourier input encoding seemed to be very efficient in our tests and **(ii)** this input encoding can be used in established transformer architectures, it would be interesting to see if there are benefits in using fourier input encoding in established transformer architectures. For example we could use a renowned Timeseries Transformer model sourced from Huggingface and test it's performance on a prediction task with vs without performing a FFT on the input embeddings.
 
 # References
 
