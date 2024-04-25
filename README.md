@@ -151,6 +151,9 @@ Table: Used hyperparameters \label{table:used-hyperparameters}
 
 As can be seen in (Figure @{fig:validation_loss_comparison}) and (Figure @{fig:test_loss_comparison}) the fast-fourier-transform attention mechanism showed the best performance on the test and validation dataset.  
 
+![Validation loss comparison](figures/validation_loss_comparison.png){#fig:validation_loss_comparison height=50% width=50%}
+![Test loss comparison](figures/test_loss_comparison.png){#fig:test_loss_comparison height=50% width=50%}
+
 In order to evaluate the first research question, we formulated the following H~0~ hypothesis : 
 
 > **H~0~ : The performances of the four attention mechanisms (AM-1, AM-2, AM-3, AM-4) are equal.**
