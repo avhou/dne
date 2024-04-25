@@ -149,7 +149,9 @@ As discussed in [the design elaboration](#sec:design-elaboration), we evaluated 
 
 Table: Used hyperparameters \label{table:used-hyperparameters}
 
-As can be seen in (Figure @{fig:validation_loss_comparison}) the fast-fourier-transform attention mechanism showed the best performance during validation. 
+As can be seen in Figure @{fig:validation_loss_comparison}, the fast-fourier-transform attention mechanism showed the best performance during validation. 
+
+![Validation loss comparison](figures/validation_loss_comparison.png){#fig:validation_loss_comparison height=50% width=50%}
 
 In order to evaluate the first research question, we formulated the following H~0~ hypothesis : 
 
